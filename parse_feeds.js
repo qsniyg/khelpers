@@ -27,12 +27,6 @@ function read_feeds() {
         reject();
       });
   });
-
-  /*return new Promise((resolve, reject) => {
-    var content = fs.readFileSync("feeds.json");
-    feeds_json = JSON.parse(content);
-    resolve(feeds_json);
-  });*/
 }
 
 function read_toml() {

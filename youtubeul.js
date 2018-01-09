@@ -12,11 +12,6 @@ var scopes = [
   'https://www.googleapis.com/auth/youtube'
 ];
 
-/*google_oauth(scopes, function(auth) {
-  var service = google.youtube('v3');
-  console.log("YES");
-  });*/
-
 // https://stackoverflow.com/a/10073788
 function pad(n, width, z) {
   z = z || '0';
@@ -200,35 +195,6 @@ function main() {
           tags: member.tags,
           file: filename
         });
-        /*get_videos().then((data) => {
-          var count = 0;
-          for (var i = 0; i < data.length; i++) {
-            var dtitle = data[i].snippet.title;
-            if (dtitle.startsWith(firsttitle) && dtitle.endsWith(endtitle)) {
-              count++;
-            }
-          }
-
-          if (count > 0) {
-            count++;
-            title = firsttitle + " " + count + endtitle;
-            console.log(title);
-          }
-
-          upload_video({
-            title,
-            description,
-            tags: member.tags,
-            file: filename
-          });
-        }, () => {
-          upload_video({
-            title,
-            description,
-            tags: member.tags,
-            file: filename
-          });
-        });*/
         return;
       }
     }
