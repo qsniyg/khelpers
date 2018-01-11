@@ -109,7 +109,7 @@ function get_shortcode_from_url(url) {
 }
 
 function get_instagram_rssit_url(url) {
-  return 'http://localhost:8124/f/instagram/raw/p/' + get_shortcode_from_url(url) + "?output=raw";
+  return 'http://localhost:8123/f/instagram/raw/p/' + get_shortcode_from_url(url) + "?output=raw";
 }
 
 function comment_to_text(comment) {
@@ -251,7 +251,7 @@ function main() {
             if (entry.content)
               entrytext += "\n" + entry.content + "\n\nenglish:\n\n" + entry.content + "\n";
 
-            if (!entry.story && false) {
+            if (!entry.story) {
               promises.push((function(entry, entrytext, mentries, nick) {
                 return new Promise((resolve, reject) => {
                   request(get_instagram_rssit_url(entry.url),
