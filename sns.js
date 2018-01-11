@@ -6,6 +6,7 @@ var expandHomeDir = require('expand-home-dir');
 var path = require('path');
 var fs = require('fs');
 var spawn = require('child_process').spawn;
+var request = require('request');
 
 function reset_date(d) {
   d.setHours(0);
@@ -103,6 +104,31 @@ function trim_text(text) {
   return text/*.replace(non_printable_re, "")*/.replace(/^\s+|\s+$/g, '');
 }
 
+function get_shortcode_from_url(url) {
+  return url.replace(/.*\/p\/([^/?&]*)\/*$/, "$1");
+}
+
+function get_instagram_rssit_url(url) {
+  return 'http://localhost:8124/f/instagram/raw/p/' + get_shortcode_from_url(url) + "?output=raw";
+}
+
+function comment_to_text(comment) {
+  var text = "-\n\n@" + escape_text(comment.owner.username);
+  text += "\n\n>" + escape_text(comment.text);
+  text += "\n\nenglish:\n\n>" + escape_text(comment.text);
+  text += "\n\n";
+  return text;
+}
+
+function escape_text(text) {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/#/g, "\\#")
+    .replace(/_/g, "\\_")
+    .replace(/~/g, "\\~")
+    .replace(/\^/g, "\\^");
+}
+
 function main() {
   if (process.argv.length < 4) {
     console.log("groupname start_timestamp");
@@ -119,6 +145,17 @@ function main() {
     (members) => {
       //var feed_urls = get_feed_urls(find_feed(parse_feeds.toplevel_feed, group));
       //console.log(feed_urls);
+      var important_usernames = [];
+      for (var i = 0; i < members.length; i++) {
+        if (!members[i])
+          continue;
+
+        var url = members[i].obj.url;
+        if (url.indexOf("/instagram/") < 0)
+          continue;
+        important_usernames.push(url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1"));
+      }
+
       var group_members = find_members_by_group(members, group);
       var urls = [];
       for (var i = 0; i < group_members.length; i++) {
@@ -146,6 +183,8 @@ function main() {
         }
 
         var mentries = {};
+        var promises = [];
+        var promises_done = 0;
         for (var member_url in mcontent) {
           var nick;
           for (var x = 0; x < group_members.length; x++) {
@@ -173,12 +212,7 @@ function main() {
                 line = line.replace(/\[STORY\] */, "");
               }
 
-              line = line
-                .replace(/\\/g, "\\\\")
-                .replace(/#/g, "\\#")
-                .replace(/_/g, "\\_")
-                .replace(/~/g, "\\~")
-                .replace(/\^/g, "\\^");
+              line = escape_text(line);
 
               if (trim_text(line) === "") {
                 newlines.push(">-");
@@ -195,44 +229,118 @@ function main() {
             var entrytext = entry.url;
             if (entry.story) {
               entrytext += " - story\n";
-              if (cereal("a").length > 0) {
-                entrytext += cheerio(cereal("a")[0]).attr("href");
-              } else {
-                entrytext += cheerio(cereal("img")[0]).attr("src");
-              }
+            } else {
+              entrytext += "\n";
             }
 
-            entrytext += "\n";
+            cereal("img").each((i, img) => {
+              var $this = cheerio(img);
+              if (cereal($this.parent("a")).length > 0) {
+                entrytext += cheerio($this.parent("a")).attr("href").replace(/.*\/\/localhost:[0-9]*\/player\//, "") + "\n";
+              } else {
+                entrytext += $this.attr("src") + "\n";
+              }
+            });
+            /*if (cereal("a").length > 0) {
+              entrytext += cheerio(cereal("a")[0]).attr("href");
+            } else {
+              entrytext += cheerio(cereal("img")[0]).attr("src");
+            }*/
+
+            //entrytext += "\n";
             if (entry.content)
               entrytext += "\n" + entry.content + "\n\nenglish:\n\n" + entry.content + "\n";
 
-            mentries[nick].push(entrytext);
+            if (!entry.story && false) {
+              promises.push((function(entry, entrytext, mentries, nick) {
+                return new Promise((resolve, reject) => {
+                  request(get_instagram_rssit_url(entry.url),
+                          (error, response, body) => {
+                            /*console.log(entry);
+                            console.log(mentries);
+                            console.log(nick);*/
+                            var node = JSON.parse(body);
+                            var comments = node.edge_media_to_comment.edges;
+                            var importantcomments = {};
+
+                            function process_comment(comment) {
+                              if (comment.created_at in importantcomments)
+                                return;
+
+                              importantcomments[comment.created_at] = comment_to_text(comment);
+
+                              var splitted = comment.text.split(" ");
+                              splitted.forEach((part) => {
+                                if (part[0] === "@") {
+                                  do_comments(part.slice(1));
+                                }
+                              });
+                            }
+
+                            function do_comments(user) {
+                              for (var j = 0; j < comments.length; j++) {
+                                var comment = comments[j].node;
+                                if (comment.created_at in importantcomments)
+                                  continue;
+                                if (user && user === comment.owner.username) {
+                                  //importantcomments.push(comment_to_text(comment));
+                                  process_comment(comment);
+                                } else if (important_usernames.indexOf(comment.owner.username) >= 0) {
+                                  //importantcomments.push(comment_to_text(comment));
+                                  process_comment(comment);
+                                }
+                              }
+                            }
+
+                            do_comments();
+
+                            if (Object.keys(importantcomments).length > 0) {
+                              entrytext += "\n";
+
+                              for (var key in importantcomments) {
+                                entrytext += importantcomments[key];
+                              }
+
+                              entrytext += "-\n\n";
+                            }
+
+                            mentries[nick].push(entrytext);
+                            console.log("Comments: " + (++promises_done) + "/" + promises.length);
+                            resolve();
+                          });
+                });
+              })(entry, entrytext, mentries, nick));
+            } else {
+              mentries[nick].push(entrytext);
+            }
           }
         }
 
-        var sorted_names = Object.keys(mentries).sort();
-        var sorted_entries = [];
+        Promise.all(promises).then(() => {
+          var sorted_names = Object.keys(mentries).sort();
+          var sorted_entries = [];
 
-        sorted_names.forEach((name) => {
-          sorted_entries.push("## " + name.toLowerCase() + "\n\n" + mentries[name].join("\n*****\n\n"));
+          sorted_names.forEach((name) => {
+            sorted_entries.push("## " + name.toLowerCase() + "\n\n" + mentries[name].join("\n*****\n\n"));
+          });
+          var sorted_text = sorted_entries.join("\n*****\n\n");
+
+          var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
+          var filename = path.join(basedir, group + "_" + timestamp + "_" + parse_feeds.create_timestamp(new Date(enddate-1)) + ".txt");
+          console.log(filename);
+          try {
+            fs.mkdirSync(basedir);
+          } catch (err) {
+            if (err.code != 'EEXIST') {
+              throw err;
+            }
+          }
+          fs.writeFileSync(filename, sorted_text);
+          spawn('leafpad', [filename], {
+            stdio: 'ignore',
+            detached: true
+          }).unref();
         });
-        var sorted_text = sorted_entries.join("\n*****\n\n");
-
-        var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
-        var filename = path.join(basedir, group + "_" + timestamp + "_" + parse_feeds.create_timestamp(enddate) + ".txt");
-        console.log(filename);
-        try {
-          fs.mkdirSync(basedir);
-        } catch (err) {
-          if (err.code != 'EEXIST') {
-            throw err;
-          }
-        }
-        fs.writeFileSync(filename, sorted_text);
-        spawn('leafpad', [filename], {
-          stdio: 'ignore',
-          detached: true
-        }).unref();
       });
     },
     (data) => {
