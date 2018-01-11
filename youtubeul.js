@@ -118,6 +118,14 @@ function upload_video(options) {
   });
 }
 
+function create_timestamp(date) {
+  var timestamp_year = pad(date.getFullYear()-2000, 2);
+  var timestamp_month = pad(date.getMonth() + 1, 2);
+  var timestamp_day = pad(date.getDate(), 2);
+  var timestamp = timestamp_year + timestamp_month + timestamp_day;
+  return timestamp;
+}
+
 function main() {
   if (process.argv.length < 3) {
     console.log("Need filename");

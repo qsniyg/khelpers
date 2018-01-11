@@ -8,11 +8,35 @@ var fs = require('fs');
 var toml = require('toml');
 const monk = require('monk');
 var db = monk("localhost/webrssview?auto_reconnect=true");
+module.exports.db = db;
 var db_feeds = db.get("feeds");
+module.exports.db_feeds = db_feeds;
+var db_content = db.get("content");
+module.exports.db_content = db_content;
 var path = require('path');
 
 var feeds_json;
 var feeds_toml;
+
+var toplevel_feed;
+module.exports.toplevel_feed = toplevel_feed;
+
+
+// https://stackoverflow.com/a/10073788
+function pad(n, width, z) {
+  z = z || '0';
+  n = n + '';
+  return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+}
+
+function create_timestamp(date) {
+  var timestamp_year = pad(date.getFullYear()-2000, 2);
+  var timestamp_month = pad(date.getMonth() + 1, 2);
+  var timestamp_day = pad(date.getDate(), 2);
+  var timestamp = timestamp_year + timestamp_month + timestamp_day;
+  return timestamp;
+}
+module.exports.create_timestamp = create_timestamp;
 
 function read_feeds() {
   return new Promise((resolve, reject) => {
@@ -34,6 +58,7 @@ function read_toml() {
     var content = fs.readFileSync(path.resolve(__dirname, "feeds.toml"));
     try {
       feeds_toml = toml.parse(content);
+      module.exports.feeds_toml = feeds_toml;
       resolve(feeds_toml);
     } catch (e) {
       console.error("Parsing error on line " + e.line + ", column " + e.column +
@@ -414,6 +439,7 @@ function parse_feeds_inner() {
             return;
           }
         }
+        module.exports.toplevel_feed = toplevel;
         var instagram = toplevel;
 
         var groups = {};
@@ -471,17 +497,19 @@ function parse_feeds_inner() {
   });
 }
 
-function parse_feeds() {
+function parse_feeds(noclose_db) {
   return new Promise((resolve, reject) => {
     parse_feeds_inner()
       .then(
         (members) => {
-          db.close();
+          if (!noclose_db)
+            db.close();
           resolve(members);
         })
       .catch(
         (data) => {
-          db.close();
+          if (!noclose_db)
+            db.close();
           reject(data);
         }
       );
