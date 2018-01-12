@@ -67,6 +67,7 @@ function read_toml() {
     }
   });
 }
+module.exports.read_toml = read_toml;
 
 function tree_to_object(tree) {
   if (tree instanceof Array && tree.length === 1) {

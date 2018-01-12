@@ -7,6 +7,11 @@ var path = require('path');
 var fs = require('fs');
 var spawn = require('child_process').spawn;
 var request = require('request');
+request = request.defaults({jar: true});
+//require('request-debug')(request);
+var readlineSync = require('readline-sync');
+var imgur = require('imgur');
+var urljoin = require('url-join');
 
 function reset_date(d) {
   d.setHours(0);
@@ -129,20 +134,525 @@ function escape_text(text) {
     .replace(/\^/g, "\\^");
 }
 
+function get_username_from_rssit_url(url) {
+  return url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1");
+}
+
+// https://stackoverflow.com/a/28149561
+function date_to_isotime(date) {
+  var tzoffset = (new Date()).getTimezoneOffset() * 60000;
+  return (new Date(date - tzoffset)).toISOString().slice(0, -1).replace(/\.[0-9]*$/, "");;
+}
+
+function do_promise(fn, cb) {
+  return new Promise((resolve, reject) => {
+    fn().then(
+      (data) => {
+        cb(data);
+        resolve();
+      },
+      (err) => {
+        console.dir(err);
+        reject(err);
+      }
+    );
+  });
+}
+
+var streamable_username;
+var streamable_password;
+
+function upload_video_old(video) {
+  if (false) {
+    var chance = new require('chance')();
+    return new Promise((resolve, reject) => {
+      //resolve({video_link:"https://fakestreamable.com/" + chance.string()});
+      resolve({shortcode: chance.string()});
+    });
+  }
+
+
+  return new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(video);
+    const data = { file: stream, title: path.parse(video).name };
+    request('https://api.streamable.com/upload', {
+      method: 'POST',
+      formData: data,
+      auth: {
+        username: streamable_username,
+        password: streamable_password
+      }
+    }, (error, response, data) => {
+      if (error) {
+        console.dir(error);
+        reject(error);
+        return;
+      }
+      /*console.dir(error);
+      console.dir(data);*/
+
+      resolve(JSON.parse(data));
+    });
+  });
+}
+
+var ranalready = false;
+function upload_video(video) {
+  /*if (ranalready)
+    return;*/
+  ranalready = true;
+  var apiurl = "https://ajax.streamable.com/";
+  var title = path.parse(video).name;
+  return new Promise((resolve, reject) => {
+    var stat = fs.statSync(video);
+    request(apiurl + "shortcode?size=" + stat.size/* + "&speed=537"*/, {},
+            (error, response, data) => {
+              if (error) {
+                console.dir(error);
+                reject(error);
+                return;
+              }
+
+              var json = JSON.parse(data);
+              //console.dir(json);
+              var shortcode = json.shortcode;
+              var uploadurl = json.url;
+              if (uploadurl.startsWith("//"))
+                uploadurl = "https:" + uploadurl;
+              var token = json.fields.token;
+              var basedata = json.options;/*{
+                "preset": "mp4",
+                "shortcode": shortcode,
+                "screenshot": true,
+                "upload_source": "web",
+                "token": json.fields.token
+              };*/
+              var transcodereq = false;
+              if (!token && json.transcoder_options) {
+                //uploadurl = json.transcoder_options.url;
+                //token = json.transcoder_options.token;
+                basedata = json.fields;
+                transcodereq = json.transcoder_options;
+              }
+              var fields = json.fields;
+              //console.log(uploadurl);
+              //console.log(token);
+              request(apiurl + "videos/" + shortcode, {
+                method: 'PATCH',
+                body: {
+                  "original_name": title,
+                  "original_size": stat.size,
+                  "title": title,
+                  "upload_source": "web"
+                },
+                json: true
+              }, (error, response, data) => {
+                if (error) {
+                  console.log("ERR2");
+                  console.dir(error);
+                  reject(error);
+                  return;
+                }
+
+                //console.log("2");
+                //console.dir(data);
+                const stream = fs.createReadStream(video);
+                var formdata = basedata;
+                basedata["file"] = stream;//{
+                  //"file": stream,
+                  /*"preset": "mp4",
+                  "shortcode": shortcode,
+                  "screenshot": true,
+                  "upload_source": "web",*/
+                  //"token": token
+              //};
+                      /*for (var key in basedata) {
+                  formdata[key] = basedata[key];
+                }*/
+                //console.dir(formdata);
+
+                request.post({
+                  url: uploadurl,
+                  //method: 'POST',
+                  formData: formdata
+                }, (error, response, data) => {
+                  //console.log("3");
+                  //console.dir(data);
+                  if (!transcodereq)
+                    resolve({"shortcode": shortcode});
+                  else {
+                    var reqbody = json.options;
+                    for (var key in transcodereq) {
+                      reqbody[key] = transcodereq[key];
+                    }
+                    request.post(apiurl + "transcode/" + shortcode, {
+                      body: reqbody,
+                      json: true
+                    }, (error, response, data) => {
+                      resolve({"shortcode": shortcode});
+                    });
+                  }
+                });
+              });
+            });
+  });
+}
+
+function upload_images(images) {
+  if (false) {
+    var chance = new require('chance')();
+    if (images.length === 1) {
+      return new Promise((resolve, reject) => {
+        resolve({data:{link:"https://fakeimgur.com/" + chance.string()}});
+      });
+    } else {
+      return new Promise((resolve, reject) => {
+        resolve({data:{id: chance.string()}});
+      });
+    }
+
+    return;
+  }
+
+  return new Promise((resolve, reject) => {
+    var promises = [];
+
+    var our_album = null;
+    var promise = null;
+    if (images.length > 1) {
+      promise = imgur.createAlbum();
+    } else {
+      promise = new Promise((resolve, reject) => {
+        resolve();
+      });
+    }
+
+    promise.then(
+      (album) => {
+        our_album = album;
+        images.forEach((image) => {
+          var readStream = fs.createReadStream(image);
+          readStream.on('error', reject);
+          var params = {};
+          if (album)
+            params = {album: album.data.deletehash};
+
+          promises.push(imgur._imgurRequest('upload', readStream, params));
+        });
+
+        var newpromise = null;
+        if (images.length === 1) {
+          newpromise =  promises[0];
+        } else {
+          newpromise = new Promise((resolve, reject) => {
+            Promise.all(promises).then(
+              () => {
+                resolve(our_album);
+              },
+              (err) => {
+                reject(err);
+              }
+            );
+          });
+        }
+
+        newpromise.then(
+          (data) => {
+            resolve(data);
+          },
+          (err) => {
+            reject(err);
+          }
+        );
+      },
+      (err) => {
+        reject(err);
+      }
+    );
+  });
+}
+
+function update_file_main(filename, splitted) {
+  var key = parse_feeds.feeds_toml.general.encrypt_key;
+  var encryptor = require('simple-encryptor')(key);
+  streamable_username = parse_feeds.feeds_toml.general.streamable_id;
+  streamable_password = encryptor.decrypt(parse_feeds.feeds_toml.general.streamable_pass);
+
+  imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
+  /*imgur.getCredits().then((credits) => {
+    console.dir(credits);
+  });*/
+  //imgur.setAPIUrl('https://api.imgur.com/3/');
+
+  /*var contents = fs.readFileSync(filename).toString('utf8');
+  var splitted = contents.split("\n");*/
+  var extra = {};
+  var promises = [];
+  for (var i = 0; i < splitted.length; i++) {
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram.com\//)) {
+      continue;
+    }
+
+    var origi = i;
+    i++;
+    var images = {};
+    var videos = {};
+    var story = "";
+
+    if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
+      story = "story, ";
+    }
+
+    for (; i < splitted.length; i++) {
+      if (trim_text(splitted[i]).length === 0) {
+        break;
+      }
+
+      var file = expandHomeDir(splitted[i]);
+      if (!fs.existsSync(file)) {
+        console.error(file + " does not exist.");
+        continue;
+      } else {
+        var key = i;
+        /*console.log(story);
+        console.log(key);
+        console.log(origi);
+        console.log("");*/
+        if (story && key === (origi + 1)) {
+          key--;
+        }
+        extra[i] = "";
+        if (file.endsWith(".jpg"))
+          images[key] = file;
+        else if (file.endsWith(".mp4"))
+          videos[key] = file;
+        else
+          console.error("Unknown extension for " + file);
+      }
+    }
+
+    //console.log(images);
+    //console.log(videos);
+    //console.log("---");
+    //continue;
+
+    ((images, videos, story) => {
+      if (images.length === 0 && videos.length === 0) {
+        console.log("Need to fetch...");
+      } else {
+        //var promises = [];
+        //var extra = [];
+
+        if (Object.keys(images).length === 1) {
+          var key = Object.keys(images)[0];
+          //console.log(key);
+
+          promises.push(do_promise(() => {
+            //return new Promise(imgur.uploadFile(images[key]);
+            return upload_images([images[key]]);
+          }, (json) => {
+            //console.dir(json);
+            extra[key] = json.data.link + " - " + story + "image";
+            //console.dir(extra);
+          }));
+        } else if (Object.keys(images).length > 1) {
+          var key = Object.keys(images)[0];
+          for (var y = 1; y < Object.keys(images).length; y++) {
+            extra[Object.keys(images)[y]] = "";
+          }
+
+          promises.push(do_promise(() => {
+            var newimages = [];
+            for (var image in images) {
+              newimages.push(images[image]);
+            }
+
+            return upload_images(newimages);//imgur.uploadAlbum(newimages, "File");
+          }, (json) => {
+            //console.dir(json);
+            extra[key] = "https://imgur.com/" + json.data.id + " - " + story + "images";
+          }));
+        }
+
+        for (var x in videos) {
+          promises.push(((x) => {
+            return new Promise((resolve, reject) => {
+              upload_video(videos[x]).then(
+                (data) => {
+                  //console.dir(data);
+                  var text = "https://streamable.com/" + data.shortcode + " - " + story;
+                  if (videos.length > 1)
+                    text += "video " + (x + 1);
+                  else
+                    text += "video";
+
+                  extra[x] = text;
+                  resolve();
+                },
+                (err) => {
+                  reject(err);
+                }
+              );
+            });
+          })(x));
+        }
+      }
+    })(images, videos, story);
+  }
+
+  Promise.all(promises).then(() => {
+    console.log("Replacing " + Object.keys(extra).length + " lines");
+    /*if ((i - origi) !== extra.length) {
+      console.error("Mismatching orig/mod length: " + (i - origi) + "/" + extra.length);
+    }*/
+
+    for (var i in extra) {
+      splitted[i] = "\n" + extra[i];
+    }
+
+    console.log(filename + "_mod");
+
+    // remove duplicate empty lines
+    splitted = splitted.join("\n").split("\n");
+    var newsplitted = [];
+    var lastline = null;
+    splitted.forEach((line) => {
+      if (trim_text(line) === "" && lastline === "")
+        return;
+
+      newsplitted.push(line);
+      lastline = trim_text(line);
+    });
+
+    var newtext = newsplitted.join("\n");
+    fs.writeFileSync(filename + "_mod", newtext);
+  });
+}
+
+function update_file(filename) {
+  var contents = fs.readFileSync(filename).toString('utf8');
+  var splitted = contents.split("\n");
+  return update_file_main(filename, splitted);
+
+  var newsplitted = [];
+  var promises = [];
+  for (var i = 0; i < splitted.length; i++) {
+    newsplitted.push(splitted[i]);
+
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram.com\//)) {
+      continue;
+    }
+
+    var origi = i;
+    i++;
+    var have_more = false;
+
+    for (; i < splitted.length; i++) {
+      if (trim_text(splitted[i]).length === 0) {
+        break;
+      }
+
+      have_more = true;
+      break;
+    }
+
+    i--;
+
+    if (!have_more) {
+      var url = splitted[origi];
+      console.log("Fetching info for " + url);
+      ((i) => {
+        promises.push(new Promise((resolve, reject) => {
+          request(get_instagram_rssit_url(url),
+                  (error, response, body) => {
+                    // fixme: replace url with local
+                    var node = JSON.parse(body);
+                    var newarr = [];
+                    if (node.node_images.length > 0)
+                      newarr.push(node.node_images.join("\n"));
+                    if (node.node_videos.length > 0)
+                      node.node_videos.forEach((video) => {
+                        newarr.push(video.video);
+                      });
+                    newarr.push("");
+
+                    for (var x = 0; x < newarr.length; x++) {
+                      newsplitted.splice(i + x, 0, newarr[x]);
+                    }
+                    resolve();
+                  });
+        }));
+      })(i + 1);
+    }
+  }
+
+  Promise.all(promises).then(() => {
+    update_file_main(filename, newsplitted);
+  });
+}
+
 function main() {
   if (process.argv.length < 4) {
     console.log("groupname start_timestamp");
     return;
   }
 
+
+  if (process.argv[2] === "encrypt") {
+    parse_feeds.read_toml().then(
+      () => {
+        var key = parse_feeds.feeds_toml.general.encrypt_key;
+        var encryptor = require('simple-encryptor')(key);
+        console.log(encryptor.encrypt(process.argv[3]));
+      }
+    );
+    return;
+  }
+
   var group = process.argv[2];
   var timestamp = process.argv[3];
   var startdate = parse_timestamp(timestamp);
-  var enddate = new Date();
-  reset_date(enddate);
+
+  var enddate;
+  var end_timestamp;
+  var create = true;
+  if (process.argv.length == 5) {
+    end_timestamp = process.argv[4];
+    enddate = parse_timestamp(end_timestamp);
+    create = false;
+  } else {
+    enddate = new Date();
+    reset_date(enddate);
+    enddate = new Date(enddate - 1);
+    end_timestamp = parse_feeds.create_timestamp(enddate);
+  }
+
+  var basename = group + "_" + timestamp + "_" + end_timestamp + ".txt";
 
   parse_feeds.parse_feeds(true).then(
     (members) => {
+      var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
+      var filename = path.join(basedir, basename);
+      console.log(filename);
+
+      if (!create) {
+        if (!fs.existsSync(filename)) {
+          console.log(filename + " doesn't exist");
+        }
+
+        update_file(filename);
+
+        parse_feeds.db.close();
+        return;
+      }
+
+      if (fs.existsSync(filename)) {
+        if (!readlineSync.keyInYNStrict("Do you wish to replace " + filename + "?")) {
+          parse_feeds.db.close();
+          return;
+        }
+      }
+
       //var feed_urls = get_feed_urls(find_feed(parse_feeds.toplevel_feed, group));
       //console.log(feed_urls);
       var important_usernames = [];
@@ -153,7 +663,7 @@ function main() {
         var url = members[i].obj.url;
         if (url.indexOf("/instagram/") < 0)
           continue;
-        important_usernames.push(url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1"));
+        important_usernames.push(get_username_from_rssit_url(url));
       }
 
       var group_members = find_members_by_group(members, group);
@@ -195,6 +705,10 @@ function main() {
 
           mentries[nick] = [];
           var mmember = mcontent[member_url];
+          var member_username = get_username_from_rssit_url(mmember[0].url);
+          var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, "instagram", member_username));
+          var items = fs.readdirSync(dl_path);
+          items = items.sort();
           for (var x = 0; x < mmember.length; x++) {
             var cereal = cheerio.load(mmember[x].content);
             var text = cheerio(cereal("p")[0]).text();
@@ -233,14 +747,58 @@ function main() {
               entrytext += "\n";
             }
 
+            //entrytext += get_username_from_rssit_url(mmember[x].url) + ":" + mmember[x].created_at + "\n";
+
+            var igimages = [];
+            var igvideos = [];
             cereal("img").each((i, img) => {
               var $this = cheerio(img);
               if (cereal($this.parent("a")).length > 0) {
-                entrytext += cheerio($this.parent("a")).attr("href").replace(/.*\/\/localhost:[0-9]*\/player\//, "") + "\n";
+                igvideos.push(cheerio($this.parent("a")).attr("href").replace(/.*\/\/localhost:[0-9]*\/player\//, ""));
               } else {
-                entrytext += $this.attr("src") + "\n";
+                igimages.push($this.attr("src"));
               }
             });
+
+            var starting = "(" + date_to_isotime(mmember[x].created_at);
+            var limages = [];
+            var lvideos = [];
+            items.forEach((item) => {
+              if (item.startsWith(starting)) {
+                var end = "";
+                var igarr = null;
+                var larr = null;
+                if (item.endsWith(".jpg")) {
+                  igarr = igimages;
+                  larr = limages;
+                  end = ".jpg";
+                } else if (item.endsWith(".mp4")) {
+                  igarr = igvideos;
+                  larr = limages;
+                  end = ".mp4";
+                } else {
+                  console.log("Unknown extension for " + item);
+                }
+
+                if (igarr.length > 1) {
+                  end = ":" + igarr.length + ")" + end;
+                }
+
+                if (!item.endsWith(end))
+                  return;
+
+                if (igarr.length === larr.length)
+                  return;
+
+                larr.push(path.join(dl_path, item).replace(/^\/home\/[^/]*\//, "~/"));
+              }
+            });
+
+            if (limages.length > 0)
+              entrytext += limages.join("\n") + "\n";
+            if (lvideos.length > 0)
+              entrytext += lvideos.join("\n") + "\n";
+
             /*if (cereal("a").length > 0) {
               entrytext += cheerio(cereal("a")[0]).attr("href");
             } else {
@@ -295,7 +853,7 @@ function main() {
                             do_comments();
 
                             if (Object.keys(importantcomments).length > 0) {
-                              entrytext += "\n";
+                              entrytext += "\n-\n\n*comments*\n\n";
 
                               for (var key in importantcomments) {
                                 entrytext += importantcomments[key];
@@ -325,9 +883,7 @@ function main() {
           });
           var sorted_text = sorted_entries.join("\n*****\n\n");
 
-          var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
-          var filename = path.join(basedir, group + "_" + timestamp + "_" + parse_feeds.create_timestamp(new Date(enddate-1)) + ".txt");
-          console.log(filename);
+
           try {
             fs.mkdirSync(basedir);
           } catch (err) {
@@ -336,7 +892,10 @@ function main() {
             }
           }
           fs.writeFileSync(filename, sorted_text);
-          spawn('leafpad', [filename], {
+          var editor = parse_feeds.feeds_toml.general.editor;
+          var editorargs = editor.slice(1);
+          editorargs.push(filename);
+          spawn(editor[0], editorargs, {
             stdio: 'ignore',
             detached: true
           }).unref();
