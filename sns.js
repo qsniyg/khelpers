@@ -81,10 +81,12 @@ function find_feed(feed, name) {
 
 function find_members_by_group(members, group) {
   var ret = [];
+  var ignore = parse_feeds.feeds_toml.general.ignore_sns || [];
 
   for (var i = 0; i < members.length; i++) {
     var member = members[i];
-    if (!member)
+
+    if (!member || ignore.indexOf(get_username_from_rssit_url(member.obj.url)) >= 0)
       continue;
 
     if (member.alt !== group &&
