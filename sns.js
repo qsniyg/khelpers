@@ -470,7 +470,7 @@ function update_file_main(filename, splitted) {
             return upload_images(newimages);//imgur.uploadAlbum(newimages, "File");
           }, (json) => {
             //console.dir(json);
-            extra[key] = "https://imgur.com/" + json.data.id + " - " + story + "images";
+            extra[key] = "https://imgur.com/a/" + json.data.id + " - " + story + "images";
           }));
         }
 
