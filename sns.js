@@ -7,7 +7,7 @@ var path = require('path');
 var fs = require('fs');
 var spawn = require('child_process').spawn;
 var request = require('request');
-request = request.defaults({jar: true});
+//request = request.defaults({jar: true});
 //require('request-debug')(request);
 var readlineSync = require('readline-sync');
 var imgur = require('imgur');
@@ -205,9 +205,11 @@ function upload_video(video) {
   ranalready = true;
   var apiurl = "https://ajax.streamable.com/";
   var title = path.parse(video).name;
+  var jar = request.jar();
+  var request_binks = request.defaults({jar: jar});
   return new Promise((resolve, reject) => {
     var stat = fs.statSync(video);
-    request(apiurl + "shortcode?size=" + stat.size/* + "&speed=537"*/, {},
+    request_binks(apiurl + "shortcode?size=" + stat.size/* + "&speed=537"*/, {},
             (error, response, data) => {
               if (error) {
                 console.dir(error);
@@ -244,7 +246,7 @@ function upload_video(video) {
               var fields = json.fields;
               //console.log(uploadurl);
               //console.log(token);
-              request(apiurl + "videos/" + shortcode, {
+              request_binks(apiurl + "videos/" + shortcode, {
                 method: 'PATCH',
                 body: {
                   "original_name": title,
@@ -263,9 +265,11 @@ function upload_video(video) {
 
                 //console.log("2");
                 //console.dir(data);
+
                 const stream = fs.createReadStream(video);
                 var formdata = basedata;
-                basedata["file"] = stream;//{
+                formdata["file"] = stream;
+                //console.dir(formdata);//{
                   //"file": stream,
                   /*"preset": "mp4",
                   "shortcode": shortcode,
@@ -278,7 +282,7 @@ function upload_video(video) {
                 }*/
                 //console.dir(formdata);
 
-                request.post({
+                request_binks.post({
                   url: uploadurl,
                   //method: 'POST',
                   formData: formdata
@@ -292,10 +296,16 @@ function upload_video(video) {
                     for (var key in transcodereq) {
                       reqbody[key] = transcodereq[key];
                     }
-                    request.post(apiurl + "transcode/" + shortcode, {
+                    request_binks.post(apiurl + "transcode/" + shortcode, {
                       body: reqbody,
                       json: true
                     }, (error, response, data) => {
+                      if (error) {
+                        console.log("ERROR");
+                        console.dir(err);
+                      }
+                      //console.log("4");
+                      //console.dir(data);
                       resolve({"shortcode": shortcode});
                     });
                   }
