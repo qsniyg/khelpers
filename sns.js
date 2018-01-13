@@ -235,6 +235,11 @@ function upload_video(video) {
                 //token = json.transcoder_options.token;
                 basedata = json.fields;
                 transcodereq = json.transcoder_options;
+              } else {
+                basedata.upload_source = "web";
+                for (var field in json.fields)
+                  basedata[field] = json.fields[field];
+                //basedata.token = json.fields.token;
               }
               var fields = json.fields;
               //console.log(uploadurl);
@@ -300,12 +305,14 @@ function upload_video(video) {
   });
 }
 
+var uploaded_images = [];
+
 function upload_images(images) {
   if (false) {
     var chance = new require('chance')();
     if (images.length === 1) {
       return new Promise((resolve, reject) => {
-        resolve({data:{link:"https://fakeimgur.com/" + chance.string()}});
+        resolve({data:{link:"https://fakeimgur.com/" + chance.string(),deletehash:chance.string()}});
       });
     } else {
       return new Promise((resolve, reject) => {
@@ -322,7 +329,44 @@ function upload_images(images) {
     var our_album = null;
     var promise = null;
     if (images.length > 1) {
-      promise = imgur.createAlbum();
+      if (images !== uploaded_images)
+        promise = imgur.createAlbum();
+      else {
+        if (uploaded_images.length === 0) {
+          resolve(null);
+          return null;
+        }
+
+        //new Promise((resolve, reject) => {
+          imgur._getAuthorizationHeader().then((authHeader) => {
+            var options  = {
+              uri: 'https://api.imgur.com/3/album',
+              method: 'POST',
+              encoding: 'utf8',
+              json: true,
+              headers: {
+                Authorization: authHeader,
+              },
+              body: {
+                "deletehashes": images.join(",")
+              }
+            };
+
+            console.dir(options);
+
+            var r = request(options, (err, res, body) => {
+              if (err) {
+                reject(err);
+              } else if (body && !body.success) {
+                reject({status: body.status, message: body.data ? body.data.error : 'No body data response'});
+              } else {
+                resolve(body);
+              }
+            });
+          });
+      //});
+        return;
+      }
     } else {
       promise = new Promise((resolve, reject) => {
         resolve();
@@ -339,7 +383,17 @@ function upload_images(images) {
           if (album)
             params = {album: album.data.deletehash};
 
-          promises.push(imgur._imgurRequest('upload', readStream, params));
+          promises.push(new Promise((resolve, reject) => {
+              imgur._imgurRequest('upload', readStream, params).then(
+                (data) => {
+                  console.log(data.data.deletehash);
+                  uploaded_images.push(data.data.deletehash);
+                  resolve(data);
+                },
+                (err) => {
+                  reject(err);
+                });
+          }));
         });
 
         var newpromise = null;
@@ -374,13 +428,52 @@ function upload_images(images) {
   });
 }
 
+function process_extra(splitted, extra) {
+  console.log("Replacing " + Object.keys(extra).length + " lines");
+  /*if ((i - origi) !== extra.length) {
+    console.error("Mismatching orig/mod length: " + (i - origi) + "/" + extra.length);
+    }*/
+
+  for (var i in extra) {
+    splitted[i] = "\n" + extra[i];
+  }
+
+  splitted = splitted.join("\n").split("\n");
+  var newsplitted = [];
+  var lastline = null;
+  splitted.forEach((line) => {
+    if (trim_text(line) === "" && lastline === "")
+      return;
+
+    newsplitted.push(line);
+    lastline = trim_text(line);
+  });
+
+  return newsplitted.join("\n");
+}
+
+function replace_lines(filename, splitted, extra, album) {
+  var newtext = process_extra(splitted, extra);
+
+  if (album) {
+    newtext = "https://imgur.com/a/" + album.data.id + " - images below as an album\n\n" + newtext;
+  }
+
+  console.log(filename + "_mod");
+  fs.writeFileSync(filename + "_mod", newtext);
+}
+
 function update_file_main(filename, splitted) {
   var key = parse_feeds.feeds_toml.general.encrypt_key;
   var encryptor = require('simple-encryptor')(key);
   streamable_username = parse_feeds.feeds_toml.general.streamable_id;
   streamable_password = encryptor.decrypt(parse_feeds.feeds_toml.general.streamable_pass);
 
-  imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
+  //imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
+  imgur.setCredentials(parse_feeds.feeds_toml.general.imgur_user,
+                       encryptor.decrypt(parse_feeds.feeds_toml.general.imgur_pass),
+                       parse_feeds.feeds_toml.general.imgur_id);
+
   /*imgur.getCredits().then((credits) => {
     console.dir(credits);
   });*/
@@ -454,6 +547,7 @@ function update_file_main(filename, splitted) {
             return upload_images([images[key]]);
           }, (json) => {
             //console.dir(json);
+            console.log("Single image");
             extra[key] = json.data.link + " - " + story + "image";
             //console.dir(extra);
           }));
@@ -472,23 +566,27 @@ function update_file_main(filename, splitted) {
             return upload_images(newimages);//imgur.uploadAlbum(newimages, "File");
           }, (json) => {
             //console.dir(json);
+            console.log("Album");
             extra[key] = "https://imgur.com/a/" + json.data.id + " - " + story + "images";
           }));
         }
 
+        var x_i = 0;
         for (var x in videos) {
-          promises.push(((x) => {
+          promises.push(((x, x_i) => {
             return new Promise((resolve, reject) => {
               upload_video(videos[x]).then(
                 (data) => {
                   //console.dir(data);
                   var text = "https://streamable.com/" + data.shortcode + " - " + story;
                   if (videos.length > 1)
-                    text += "video " + (x + 1);
+                    text += "video " + (x_i + 1);
                   else
                     text += "video";
 
                   extra[x] = text;
+
+                  console.log("Video " + x_i + "/" + Object.keys(videos).length);
                   resolve();
                 },
                 (err) => {
@@ -496,38 +594,54 @@ function update_file_main(filename, splitted) {
                 }
               );
             });
-          })(x));
+          })(x, x_i));
+          x_i++;
         }
       }
     })(images, videos, story);
   }
 
   Promise.all(promises).then(() => {
-    console.log("Replacing " + Object.keys(extra).length + " lines");
-    /*if ((i - origi) !== extra.length) {
-      console.error("Mismatching orig/mod length: " + (i - origi) + "/" + extra.length);
-    }*/
+    upload_images(uploaded_images).then(
+        (data) => {
+          //console.log(data);
+          return data;
+        },
+        (err) => {
+          console.dir(err);
+          return null;
+        }
+    ).then((album_data) => {
+      replace_lines(filename, splitted, extra, album_data);
+      return;
+      console.log("Replacing " + Object.keys(extra).length + " lines");
+      /*if ((i - origi) !== extra.length) {
+        console.error("Mismatching orig/mod length: " + (i - origi) + "/" + extra.length);
+        }*/
 
-    for (var i in extra) {
-      splitted[i] = "\n" + extra[i];
-    }
+      for (var i in extra) {
+        splitted[i] = "\n" + extra[i];
+      }
 
-    console.log(filename + "_mod");
+      console.log(filename + "_mod");
 
-    // remove duplicate empty lines
-    splitted = splitted.join("\n").split("\n");
-    var newsplitted = [];
-    var lastline = null;
-    splitted.forEach((line) => {
-      if (trim_text(line) === "" && lastline === "")
-        return;
+      // remove duplicate empty lines
+      splitted = splitted.join("\n").split("\n");
+      var newsplitted = [];
+      var lastline = null;
+      splitted.forEach((line) => {
+        if (trim_text(line) === "" && lastline === "")
+          return;
 
-      newsplitted.push(line);
-      lastline = trim_text(line);
+        newsplitted.push(line);
+        lastline = trim_text(line);
+      });
+
+        //newsplitted.unshift(
+
+      var newtext = newsplitted.join("\n");
+      fs.writeFileSync(filename + "_mod", newtext);
     });
-
-    var newtext = newsplitted.join("\n");
-    fs.writeFileSync(filename + "_mod", newtext);
   });
 }
 
@@ -642,7 +756,11 @@ function main() {
           console.log(filename + " doesn't exist");
         }
 
-        update_file(filename);
+        imgur._getAuthorizationHeader().then(() => {
+          update_file(filename);
+        }, (err) => {
+          console.dir(err);
+        });
 
         parse_feeds.db.close();
         return;
@@ -861,7 +979,7 @@ function main() {
                                 entrytext += importantcomments[key];
                               }
 
-                              entrytext += "-\n\n";
+                              //entrytext += "-\n\n";
                             }
 
                             mentries[nick].push(entrytext);
