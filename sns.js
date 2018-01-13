@@ -12,6 +12,7 @@ var request = require('request');
 var readlineSync = require('readline-sync');
 var imgur = require('imgur');
 var urljoin = require('url-join');
+var naturalSort = require('javascript-natural-sort');
 
 function reset_date(d) {
   d.setHours(0);
@@ -119,8 +120,13 @@ function get_instagram_rssit_url(url) {
   return 'http://localhost:8123/f/instagram/raw/p/' + get_shortcode_from_url(url) + "?output=raw";
 }
 
+var instagram_username_names = {};
+
 function comment_to_text(comment) {
   var text = "-\n\n@" + escape_text(comment.owner.username);
+  if (comment.owner.username in instagram_username_names) {
+    text += " *(" + instagram_username_names[comment.owner.username].toLowerCase() + ")*";
+  }
   text += "\n\n>" + escape_text(comment.text);
   text += "\n\nenglish:\n\n>" + escape_text(comment.text);
   text += "\n\n";
@@ -316,8 +322,10 @@ function upload_video(video) {
 }
 
 var uploaded_images = [];
+var images_times_ran = 0;
 
 function upload_images(images) {
+  images_times_ran++;
   if (false) {
     var chance = new require('chance')();
     if (images.length === 1) {
@@ -342,7 +350,8 @@ function upload_images(images) {
       if (images !== uploaded_images)
         promise = imgur.createAlbum();
       else {
-        if (uploaded_images.length === 0) {
+        // 2, including this time
+        if (uploaded_images.length === 0 || images_times_ran <= 2) {
           resolve(null);
           return null;
         }
@@ -793,7 +802,19 @@ function main() {
         var url = members[i].obj.url;
         if (url.indexOf("/instagram/") < 0)
           continue;
-        important_usernames.push(get_username_from_rssit_url(url));
+
+        var member_username = get_username_from_rssit_url(url);
+        important_usernames.push(member_username);
+
+        if (!members[i].nicks)
+          continue;
+
+        if (members[i].group && members[i].group !== group)
+          instagram_username_names[member_username] = parse_feeds.parse_hangul(members[i].group) + " ";
+        else
+          instagram_username_names[member_username] = "";
+
+        instagram_username_names[member_username] += members[i].nicks[0].roman;
       }
 
       var group_members = find_members_by_group(members, group);
@@ -838,7 +859,7 @@ function main() {
           var member_username = get_username_from_rssit_url(mmember[0].url);
           var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, "instagram", member_username));
           var items = fs.readdirSync(dl_path);
-          items = items.sort();
+          items = items.sort(naturalSort);
           for (var x = 0; x < mmember.length; x++) {
             var cereal = cheerio.load(mmember[x].content);
             var text = cheerio(cereal("p")[0]).text();
@@ -987,13 +1008,15 @@ function main() {
                                 var comment = comments[j].node;
                                 if (comment.created_at in importantcomments)
                                   continue;
-                                if (user && user === comment.owner.username) {
+                                if (important_usernames.indexOf(comment.owner.username) >= 0) {
+                                  process_comment(comment);
+                                } else if (user && user === comment.owner.username) {
                                   //importantcomments.push(comment_to_text(comment));
                                   process_comment(comment);
-                                } else if (important_usernames.indexOf(comment.owner.username) >= 0) {
+                                }/* else if (important_usernames.indexOf(comment.owner.username) >= 0) {
                                   //importantcomments.push(comment_to_text(comment));
                                   process_comment(comment);
-                                }
+                                }*/
                               }
                             }
 
