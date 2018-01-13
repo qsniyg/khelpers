@@ -851,9 +851,14 @@ function main() {
             var has_nonblank = false;
 
             text.split("\n").forEach((line) => {
-              if (trim_text(line).startsWith("[STORY]")) {
+              var trimmed_line = trim_text(line);
+              if (trimmed_line.startsWith("[STORY]")) {
                 entry.story = true;
                 line = line.replace(/\[STORY\] */, "");
+              } else if (trimmed_line.startsWith("[LIVE]") ||
+                         trimmed_line.startsWith("[LIVE REPLAY]")) {
+                console.log("Live: " + entry.url + "(" + text + ")");
+                entry.live = true;
               }
 
               line = escape_text(line);
@@ -865,6 +870,9 @@ function main() {
                 has_nonblank = true;
               }
             });
+
+            if (entry.live)
+              continue;
 
             if (has_nonblank) {
               entry.content = newlines.join("\n>\n");
@@ -944,6 +952,15 @@ function main() {
                 return new Promise((resolve, reject) => {
                   request(get_instagram_rssit_url(entry.url),
                           (error, response, body) => {
+                            if (response.statusCode === 500) {
+                              // deleted post
+                              entrytext = entrytext.replace(/^(https?:\/\/[^/]*instagram.*\/p\/.*)$/m, "$1 - deleted");
+                              mentries[nick].push(entrytext);
+                              console.log("Comments: " + (++promises_done) + "/" + promises.length);
+                              resolve();
+                              return;
+                            }
+
                             /*console.log(entry);
                             console.log(mentries);
                             console.log(nick);*/
