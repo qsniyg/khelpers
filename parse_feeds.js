@@ -89,7 +89,10 @@ function tree_to_object(tree) {
   }
 }
 
-function get_user_roman(text) {
+function get_user_roman(text, obj) {
+  if (obj && (text in obj))
+    return obj[text];
+
   if (feeds_toml.roman && (text in feeds_toml.roman)) {
     return feeds_toml.roman[text];
   }
@@ -121,9 +124,9 @@ function in_ignorefolders(text) {
   return false;
 }
 
-function parse_hangul(text, force) {
+function parse_hangul(text, force, obj) {
   if (!force) {
-    var roman = get_user_roman(text);
+    var roman = get_user_roman(text, obj);
     if (roman)
       return roman;
   }
@@ -198,18 +201,19 @@ function parse_hangul(text, force) {
 }
 module.exports.parse_hangul = parse_hangul;
 
-function parse_hangul_first(text) {
-  text = parse_hangul(text);
+function parse_hangul_first(text, force, obj) {
+  text = parse_hangul(text, force, obj);
   if (text instanceof Array)
     return text[0];
   return text;
 }
 module.exports.parse_hangul_first = parse_hangul_first;
 
-function parse_hangul_obj(text) {
+function parse_hangul_obj(text, force, obj) {
   return {
     hangul: text,
-    roman: parse_hangul(text)
+    roman: parse_hangul(text, force, obj),
+    roman_first: parse_hangul_first(text, force, obj)
   };
 }
 
@@ -217,47 +221,49 @@ function is_hangul(charcode) {
   return charcode >= 0xAC00 && charcode <= 0xD7AF;
 }
 
-function parse_name(text) {
-  var roman = get_user_roman(text);
+function parse_name(text, obj) {
+  var roman = get_user_roman(text, obj);
   if (roman)
     return roman;
 
   if (!is_hangul(text.charCodeAt(0)))
-    return parse_hangul(text);
+    return parse_hangul(text, false, obj);
 
-  var lastname = parse_hangul(text[0]);
-  if (lastname === "Gim") {
+  var lastname = parse_hangul(text[0], false, obj);
+  if (text[0] === "김") {
     lastname = "Kim";
-  } else if (lastname === "I") {
+  } else if (text[0] === "이") {
     lastname = "Lee";
-  } else if (lastname === "Bak") {
+  } else if (text[0] === "박") {
     lastname = "Park";
-  } else if (lastname === "Im") {
+  } else if (text[0] === "임") { // should this be kept?
     lastname = "Lim";
-  } else if (lastname === "O") {
+  } else if (text[0] === "오") {
     lastname = "Oh";
-  } else if (lastname === "Jeong") {
+  } else if (text[0] === "정") {
     lastname = "Jung";
-  } else if (lastname === "No") {
+  } else if (text[0] === "노") {
     lastname = "Noh";
-  } else if (lastname === "Gang") {
+  } else if (text[0] === "강") {
     lastname = "Kang";
-  } else if (lastname === "Ham") {
+  } else if (text[0] === "함") {
     lastname = "Hahm";
-  } else if (lastname === "Choe") {
+  } else if (text[0] === "최") {
     lastname = "Choi";
+  } else if (text[0] === "권") {
+    lastname = "Kwon";
   }
-  var retval = lastname + " " + parse_hangul(text.slice(1));
+  var retval = lastname + " " + parse_hangul(text.slice(1), false, obj);
   //console.log(text);
   //console.log(retval);
   return retval;
 }
 module.exports.parse_name = parse_name;
 
-function parse_name_obj(text) {
+function parse_name_obj(text, obj) {
   return {
     hangul: text,
-    roman: parse_name(text)
+    roman: parse_name(text, obj)
   };
 }
 
@@ -266,7 +272,7 @@ function strip(x) {
   return x.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
 }
 
-function get_name(text) {
+function get_name(text, username) {
   if (text.length < 2)
     return;
 
@@ -280,11 +286,11 @@ function get_name(text) {
       var alt = feeds_toml[text];
 
       alt.names.forEach((x) => {
-        ret.names.push(parse_name_obj(x));
+        ret.names.push(parse_name_obj(x, feeds_toml[text]));
       });
 
       alt.nicks.forEach((x) => {
-        ret.nicks.push(parse_hangul_obj(x));
+        ret.nicks.push(parse_hangul_obj(x, false, feeds_toml[text]));
       });
 
       return ret;
@@ -293,24 +299,47 @@ function get_name(text) {
     }
   }
 
-  text = strip(text);
+  var alt = {};
+
+  if (username && ("@" + username) in feeds_toml) {
+    alt = feeds_toml["@" + username];
+
+    if ("names" in alt) {
+      alt.names.forEach((x) => {
+        ret.names.push(parse_name_obj(x, alt));
+      });
+    }
+
+    if ("nicks" in alt) {
+      alt.nicks.forEach((x) => {
+        ret.nicks.push(parse_hangul_obj(x, false, alt));
+      });
+    }
+  }
+
+  text = strip(text.replace(/#.*$/, ""));
   if (text.indexOf(" ") >= 0) {
     var splitted = text.split(" ");
     var ssplitted = splitted[0].split("/");
     ssplitted.forEach((x) => {
-      ret.names.push(parse_name_obj(x));
+      ret.names.push(parse_name_obj(x, alt));
     });
 
     ssplitted = splitted[1].replace(/^\(/, "").replace(/\)$/, "").split("/");
     ssplitted.forEach((x) => {
-      ret.nicks.push(parse_hangul_obj(x));
+      ret.nicks.push(parse_hangul_obj(x, false, alt));
     });
   } else {
     if (text.length > 2 && is_hangul(text.charCodeAt(0)) && get_user_nick(text) !== false) {
-      ret.names.push(parse_name_obj(text));
-      ret.nicks.push(parse_hangul_obj(text.slice(1)));
+      var splitted = text.split("/");
+      splitted.forEach((x) => {
+        ret.names.push(parse_name_obj(x, alt));
+        ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
+      });
+      /*ret.names.push(parse_name_obj(text));
+      ret.nicks.push(parse_hangul_obj(text.slice(1)));*/
     } else {
-      ret.nicks.push(parse_hangul_obj(text));
+      ret.nicks.push(parse_hangul_obj(text, false, alt));
     }
   }
 
@@ -350,6 +379,10 @@ function upush(array, item) {
   }
 }
 
+function get_username_from_rssit_url(url) {
+  return url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1");
+}
+
 function parse_member(obj, options) {
   var member = {
   };
@@ -358,8 +391,12 @@ function parse_member(obj, options) {
     return;
 
   member.alt = obj.name;
+  var username = get_username_from_rssit_url(obj.url);
+  if (username && username != obj.url) {
+    member.username = username;
+  }
 
-  var name = get_name(obj.name);
+  var name = get_name(obj.name, member.username);
   if (name && (name.names || name.nicks)) {
     member.names = name.names;
     member.nicks = name.nicks;

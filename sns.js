@@ -13,6 +13,7 @@ var readlineSync = require('readline-sync');
 var imgur = require('imgur');
 var urljoin = require('url-join');
 var naturalSort = require('javascript-natural-sort');
+var wrap = require('word-wrap');
 
 function reset_date(d) {
   d.setHours(0);
@@ -123,12 +124,12 @@ function get_instagram_rssit_url(url) {
 var instagram_username_names = {};
 
 function comment_to_text(comment) {
-  var text = "-\n\n@" + escape_text(comment.owner.username);
+  var text = "-\n\n[@" + escape_text(comment.owner.username) + "](https://www.instagram.com/" + comment.owner.username + "/)";
   if (comment.owner.username in instagram_username_names) {
     text += " *(" + instagram_username_names[comment.owner.username].toLowerCase() + ")*";
   }
-  text += "\n\n>" + escape_text(comment.text);
-  text += "\n\nenglish:\n\n>" + escape_text(comment.text);
+  text += "\n\n" + quote_text(escape_text(comment.text));
+  text += "\n\nenglish:\n\n" + quote_text(escape_text(comment.text));
   text += "\n\n";
   return text;
 }
@@ -140,6 +141,13 @@ function escape_text(text) {
     .replace(/_/g, "\\_")
     .replace(/~/g, "\\~")
     .replace(/\^/g, "\\^");
+}
+
+function quote_text(text) {
+  if (trim_text(text) === "")
+    return ">-";
+  else
+    return ">" + wrap(text, {width: 60, indent:'', newline:'\n>'});
 }
 
 function get_username_from_rssit_url(url) {
@@ -503,7 +511,8 @@ function update_file_main(filename, splitted) {
   var extra = {};
   var promises = [];
   for (var i = 0; i < splitted.length; i++) {
-    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram.com\//)) {
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram.com\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo.com\//)) {
       continue;
     }
 
@@ -810,7 +819,7 @@ function main() {
           continue;
 
         if (members[i].group && members[i].group !== group)
-          instagram_username_names[member_username] = parse_feeds.parse_hangul(members[i].group) + " ";
+          instagram_username_names[member_username] = parse_feeds.parse_hangul_first(members[i].group) + " ";
         else
           instagram_username_names[member_username] = "";
 
@@ -850,7 +859,7 @@ function main() {
           var nick;
           for (var x = 0; x < group_members.length; x++) {
             if (group_members[x].obj.url === member_url) {
-              nick = group_members[x].nicks[0].roman;
+              nick = group_members[x].nicks[0].roman_first;
             }
           }
 
@@ -871,7 +880,14 @@ function main() {
             };
             var has_nonblank = false;
 
+            if (trim_text(text) === "(n/a)") {
+              entry.empty = true;
+            }
+
             text.split("\n").forEach((line) => {
+              if (entry.empty)
+                return;
+
               var trimmed_line = trim_text(line);
               if (trimmed_line.startsWith("[STORY]")) {
                 entry.story = true;
@@ -887,7 +903,8 @@ function main() {
               if (trim_text(line) === "") {
                 newlines.push(">-");
               } else {
-                newlines.push(">" + line);
+                newlines.push(quote_text(line));
+                //newlines.push(">" + wrap(line, {width: 60, indent:'', newline:'\n>'}));
                 has_nonblank = true;
               }
             });
@@ -971,13 +988,14 @@ function main() {
             if (!entry.story) {
               promises.push((function(entry, entrytext, mentries, nick) {
                 return new Promise((resolve, reject) => {
-                  request(get_instagram_rssit_url(entry.url),
+                  //console.log(get_instagram_rssit_url(entry.url) + "&count=-1")
+                  request(get_instagram_rssit_url(entry.url) + "&count=-1",
                           (error, response, body) => {
                             if (response.statusCode === 500) {
                               // deleted post
                               entrytext = entrytext.replace(/^(https?:\/\/[^/]*instagram.*\/p\/.*)$/m, "$1 - deleted");
                               mentries[nick].push(entrytext);
-                              console.log("Comments: " + (++promises_done) + "/" + promises.length);
+                              console.log("Comments: " + (++promises_done) + "/" + promises.length + " (n/a)");
                               resolve();
                               return;
                             }
@@ -1033,7 +1051,7 @@ function main() {
                             }
 
                             mentries[nick].push(entrytext);
-                            console.log("Comments: " + (++promises_done) + "/" + promises.length);
+                            console.log("Comments: " + (++promises_done) + "/" + promises.length + " (" + Object.keys(importantcomments).length + "/" + comments.length + "/" + node.edge_media_to_comment.count + ")");
                             resolve();
                           });
                 });
