@@ -38,6 +38,16 @@ function parse_timestamp(timestamp) {
   return d;
 }
 
+function spawn_editor(filename) {
+  var editor = parse_feeds.feeds_toml.general.editor;
+  var editorargs = editor.slice(1);
+  editorargs.push(filename);
+  spawn(editor[0], editorargs, {
+    stdio: 'ignore',
+    detached: true
+  }).unref();
+}
+
 /*function get_feed_urls(feed) {
   if (!feed) {
     console.log("can't find feed");
@@ -129,7 +139,11 @@ function comment_to_text(comment) {
     text += " *(" + instagram_username_names[comment.owner.username].toLowerCase() + ")*";
   }
   text += "\n\n" + quote_text(escape_text(comment.text));
-  text += "\n\nenglish:\n\n" + quote_text(escape_text(comment.text));
+
+  if (parse_feeds.has_hangul(comment.text)) {
+    text += "\n\nenglish:\n\n" + quote_text(escape_text(comment.text));
+  }
+
   text += "\n\n";
   return text;
 }
@@ -488,6 +502,7 @@ function replace_lines(filename, splitted, extra, album) {
 
   console.log(filename + "_mod");
   fs.writeFileSync(filename + "_mod", newtext);
+  spawn_editor(filename + "_mod");
 }
 
 function update_file_main(filename, splitted) {
@@ -496,10 +511,14 @@ function update_file_main(filename, splitted) {
   streamable_username = parse_feeds.feeds_toml.general.streamable_id;
   streamable_password = encryptor.decrypt(parse_feeds.feeds_toml.general.streamable_pass);
 
-  //imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
-  imgur.setCredentials(parse_feeds.feeds_toml.general.imgur_user,
-                       encryptor.decrypt(parse_feeds.feeds_toml.general.imgur_pass),
-                       parse_feeds.feeds_toml.general.imgur_id);
+  if (parse_feeds.feeds_toml.general.imgur_user) {
+    //imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
+    imgur.setCredentials(parse_feeds.feeds_toml.general.imgur_user,
+                         encryptor.decrypt(parse_feeds.feeds_toml.general.imgur_pass),
+                         parse_feeds.feeds_toml.general.imgur_id);
+  } else {
+    imgur.setClientId(parse_feeds.feeds_toml.general.imgur_id);
+  }
 
   /*imgur.getCredits().then((credits) => {
     console.dir(credits);
@@ -982,8 +1001,13 @@ function main() {
             }*/
 
             //entrytext += "\n";
-            if (entry.content)
-              entrytext += "\n" + entry.content + "\n\nenglish:\n\n" + entry.content + "\n";
+            if (entry.content) {
+              entrytext += "\n" + entry.content + "\n";
+
+              if (parse_feeds.has_hangul(entry.content, false)) {
+                entrytext+= "\nenglish:\n\n" + entry.content + "\n";
+              }
+            }
 
             if (!entry.story) {
               promises.push((function(entry, entrytext, mentries, nick) {
@@ -1067,6 +1091,8 @@ function main() {
           var sorted_entries = [];
 
           sorted_names.forEach((name) => {
+            if (mentries[name].length <= 0)
+              return;
             sorted_entries.push("## " + name.toLowerCase() + "\n\n" + mentries[name].join("\n*****\n\n"));
           });
           var sorted_text = sorted_entries.join("\n*****\n\n");

@@ -220,6 +220,19 @@ function parse_hangul_obj(text, force, obj) {
 function is_hangul(charcode) {
   return charcode >= 0xAC00 && charcode <= 0xD7AF;
 }
+module.exports.is_hangul = is_hangul;
+
+function has_hangul(text, k_counted) {
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === "ㅋ" && !k_counted)
+      continue;
+    if (is_hangul(text.charCodeAt(i)))
+      return true;
+  }
+
+  return false;
+}
+module.exports.has_hangul = has_hangul;
 
 function parse_name(text, obj) {
   var roman = get_user_roman(text, obj);

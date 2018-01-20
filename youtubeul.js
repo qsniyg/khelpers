@@ -5,6 +5,7 @@ var google_oauth = require('./google_oauth');
 var parse_feeds = require('./parse_feeds');
 var fs = require('fs');
 const notifier = require('node-notifier');
+var DMClient = require('dailymotion-sdk').client;
 
 
 var scopes = [
@@ -54,7 +55,59 @@ function get_videos() {
   });
 }
 
-function upload_video(options) {
+function upload_video_dm(options) {
+  var client = new DMClient(
+    parse_feeds.feeds_toml.general.dailymotion_id,
+    parse_feeds.feeds_toml.general.dailymotion_secret,
+    ["manage_videos"]
+  );
+
+  var key = parse_feeds.feeds_toml.general.encrypt_key;
+  var encryptor = require('simple-encryptor')(key);
+  var dm_username = parse_feeds.feeds_toml.general.dailymotion_user;
+  var dm_password = encryptor.decrypt(parse_feeds.feeds_toml.general.dailymotion_pass);
+
+  client.setCredentials(DMClient.GRANT_TYPES.PASSWORD, {
+    username: dm_username,
+    password: dm_password
+  });
+
+  client.createToken(() => {
+    var retval = client.upload({
+      filepath: options.file,
+      meta: {
+        title: options.title,
+        description: options.description,
+        tags: options.tags,
+        channel: parse_feeds.feeds_toml.general.dailymotion_channel
+      },
+      progress: (e, r, d) => {
+        if (d && d.progress) {
+          console.log(d.progress);
+        }
+      },
+      done: (err) => {
+        if (err) {
+          console.dir(err);
+          notifier.notify({
+            title: "[DM] Live error",
+            message: 'Error uploading live: ' + options.title + ' to dailymotion\nReason: ' + err
+          });
+        } else {
+          notifier.notify({
+            title: "[DM] Live uploaded",
+            message: 'Live "' + options.title + '" has been uploaded to dailymotion'
+          });
+        }
+
+        process.exit();
+      }
+    });
+    console.dir(retval);
+  });
+}
+
+function upload_video_yt(options) {
   console.log(options);
 
   google_oauth(scopes, function(auth) {
@@ -71,7 +124,8 @@ function upload_video(options) {
         snippet: {
           title: options.title,
           description: options.description,
-          tags: options.tags
+          tags: options.tags,
+          defaultAudioLanguage: "ko-KR"
         },
         status: {
           privacyStatus: 'private'
@@ -85,17 +139,18 @@ function upload_video(options) {
         console.error('Error: ' + err);
 
         notifier.notify({
-          title: "Live error",
-          message: 'Error uploading live: ' + options.title + '\nReason: ' + err
+          title: "[YT] Live error",
+          message: 'Error uploading live: ' + options.title + ' to youtube\nReason: ' + err
         });
       } else {
         notifier.notify({
-          title: "Live uploaded",
-          message: 'Live "' + options.title + '" has been uploaded'
+          title: "[YT] Live uploaded",
+          message: 'Live "' + options.title + '" has been uploaded to youtube'
         });
       }
 
-      process.exit();
+      //process.exit();
+      upload_video_dm(options);
     });
 
     var fileSize = fs.statSync(options.file).size;
@@ -109,13 +164,17 @@ function upload_video(options) {
       /*process.stdout.clearLine();
         process.stdout.cursorTo(0);*/
       /*process.stdout.write*/console.log(uploadedMBytes.toFixed(2) + ' MBs uploaded. ' +
-                           progress.toFixed(2) + '% completed.');
+                                          progress.toFixed(2) + '% completed.');
       if (progress === 100) {
         /*process.stdout.write*/console.log('\nDone uploading, waiting for response...\n');
         clearInterval(id);
       }
     }, 1000);
   });
+}
+
+function upload_video(options) {
+  upload_video_yt(options);
 }
 
 function create_timestamp(date) {
@@ -126,10 +185,16 @@ function create_timestamp(date) {
   return timestamp;
 }
 
+var dmupload = false;;
 function main() {
   if (process.argv.length < 3) {
     console.log("Need filename");
     return;
+  }
+
+  //var dmupload = false;
+  if (process.argv.length == 4 && process.argv[3] === "dm") {
+    dmupload = true;
   }
 
   var filename = process.argv[2];
@@ -241,6 +306,15 @@ function do_upload(options) {
       console.log(options.title);
     }
 
+    if (dmupload) {
+      upload_video_dm({
+        title: options.title,
+        description: options.description,
+        tags: options.tags,
+        file: options.file
+      });
+      return;
+    }
     upload_video({
       title: options.title,
       description: options.description,
