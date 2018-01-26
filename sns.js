@@ -14,28 +14,40 @@ var imgur = require('imgur');
 var urljoin = require('url-join');
 var naturalSort = require('javascript-natural-sort');
 var wrap = require('word-wrap');
+var moment = require('moment-timezone');
+
+var tz_offset = 9; // KST
+var tz_name = "Asia/Seoul";
+moment.tz.setDefault(tz_name);
 
 function reset_date(d) {
-  d.setHours(0);
-  d.setMinutes(0);
-  d.setSeconds(0);
-  d.setMilliseconds(0);
+  return moment(d).startOf("day").toDate();
+  /*d.setUTCHours(tz_offset);
+  d.setUTCMinutes(0);
+  d.setUTCSeconds(0);
+  d.setUTCMilliseconds(0);*/
 }
 
 function parse_timestamp(timestamp) {
-  var d = new Date();
-  reset_date(d);
+  /*var d = new Date();
+    d = reset_date(d);*/
+
+  var m = moment().startOf("day");
 
   var year = parseInt("20" + timestamp.slice(0, 2), 10);
-  d.setYear(year);
+  //d.setUTCFullYear(year);
+  m.year(year);
 
   var month = parseInt(timestamp.slice(2, 4), 10) - 1;
-  d.setMonth(month);
+  //d.setUTCMonth(month);
+  m.month(month);
 
   var date = parseInt(timestamp.slice(4, 6), 10);
-  d.setDate(date);
+  //d.setUTCDate(date);
+  m.date(date);
 
-  return d;
+  //return d;
+  return m.toDate();
 }
 
 function spawn_editor(filename) {
@@ -174,7 +186,9 @@ function date_to_isotime(date) {
   return (new Date(date - tzoffset)).toISOString().slice(0, -1).replace(/\.[0-9]*$/, "");;
 }
 
-function do_promise(fn, cb) {
+var errors = [];
+
+function do_promise(fn, cb, cberr) {
   return new Promise((resolve, reject) => {
     fn().then(
       (data) => {
@@ -183,7 +197,10 @@ function do_promise(fn, cb) {
       },
       (err) => {
         console.dir(err);
-        reject(err);
+        errors.push(err);
+        cberr(err);
+        resolve();
+        //reject(err);
       }
     );
   });
@@ -595,8 +612,12 @@ function update_file_main(filename, splitted) {
           }, (json) => {
             //console.dir(json);
             console.log("Single image");
+            console.log(images[key] + " - " + json.data.link);
             extra[key] = json.data.link + " - " + story + "image";
             //console.dir(extra);
+          }, (err) => {
+            console.log("Error uploading image: " + images[key]);
+            console.log("---");
           }));
         } else if (Object.keys(images).length > 1) {
           var key = Object.keys(images)[0];
@@ -614,7 +635,15 @@ function update_file_main(filename, splitted) {
           }, (json) => {
             //console.dir(json);
             console.log("Album");
+            var albumurl = "https://imgur.com/a/" + json.data.id;
+            console.log(albumurl);
+            console.dir(images);
+            console.log("---");
             extra[key] = "https://imgur.com/a/" + json.data.id + " - " + story + "images";
+          }, (err) => {
+            console.log("Error uploading album");
+            console.dir(images);
+            console.log("---");
           }));
         }
 
@@ -683,6 +712,11 @@ function update_file_main(filename, splitted) {
         newsplitted.push(line);
         lastline = trim_text(line);
       });
+
+      if (errors.length >= 0) {
+        console.log("ERRORS:");
+        console.dir(errors);
+      }
 
         //newsplitted.unshift(
 
@@ -780,12 +814,18 @@ function main() {
   var end_timestamp;
   var create = true;
   if (process.argv.length == 5) {
-    end_timestamp = process.argv[4];
+    var enddate_timestamp = process.argv[4];
+    if (enddate_timestamp[0] === "-") {
+      enddate_timestamp = enddate_timestamp.substr(1);
+    } else {
+      create = false;
+    }
+    end_timestamp = enddate_timestamp;
     enddate = parse_timestamp(end_timestamp);
-    create = false;
+    //create = false;
   } else {
     enddate = new Date();
-    reset_date(enddate);
+    enddate = reset_date(enddate);
     enddate = new Date(enddate - 1);
     end_timestamp = parse_feeds.create_timestamp(enddate);
   }
@@ -855,10 +895,20 @@ function main() {
         url: {
           $in: urls
         },
-        created_at: {
-          $gte: startdate.getTime(),
-          $lt: enddate.getTime()
-        }
+        $or: [
+          {
+            created_at: {
+              $gte: startdate.getTime(),
+              $lt: enddate.getTime()
+            }
+          },
+          {
+            added_at: {
+              $gte: startdate.getTime(),
+              $lt: enddate.getTime()
+            }
+          }
+        ]
       }, {sort: {created_at: -1}}).then((content) => {
         //console.dir(content);
         parse_feeds.db.close();
@@ -867,6 +917,12 @@ function main() {
         for (var i = 0; i < content.length; i++) {
           if (!(content[i].url in mcontent))
             mcontent[content[i].url] = [];
+
+          if ((content[i].created_at < startdate.getTime() ||
+               content[i].created_at > enddate.getTime()) &&
+              content[i].title.indexOf("[DP] ") < 0) {
+            continue;
+          }
 
           mcontent[content[i].url].push(content[i]);
         }
@@ -882,7 +938,7 @@ function main() {
             }
           }
 
-          mentries[nick] = [];
+          mentries[nick] = {};
           var mmember = mcontent[member_url];
           var member_username = get_username_from_rssit_url(mmember[0].url);
           var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, "instagram", member_username));
@@ -895,6 +951,8 @@ function main() {
             var entry = {
               url: mmember[x].link,
               story: false,
+              dp: false,
+              created: mmember[x].created_at,
               content: null
             };
             var has_nonblank = false;
@@ -903,8 +961,18 @@ function main() {
               entry.empty = true;
             }
 
+            if (trim_text(text).indexOf("[DP] ") >= 0) {
+              console.log(text);
+              entry.dp = true;
+              entry.created = mmember.added_at;
+            }
+
+            if (!mentries[nick][entry.created]) {
+              mentries[nick][entry.created] = [];
+            }
+
             text.split("\n").forEach((line) => {
-              if (entry.empty)
+              if (entry.empty || entry.dp)
                 return;
 
               var trimmed_line = trim_text(line);
@@ -938,6 +1006,8 @@ function main() {
             var entrytext = entry.url;
             if (entry.story) {
               entrytext += " - story\n";
+            } else if (entry.dp) {
+              entrytext += " - profile photo\n";
             } else {
               entrytext += "\n";
             }
@@ -1018,7 +1088,7 @@ function main() {
                             if (response.statusCode === 500) {
                               // deleted post
                               entrytext = entrytext.replace(/^(https?:\/\/[^/]*instagram.*\/p\/.*)$/m, "$1 - deleted");
-                              mentries[nick].push(entrytext);
+                              mentries[nick][entry.created].push(entrytext);
                               console.log("Comments: " + (++promises_done) + "/" + promises.length + " (n/a)");
                               resolve();
                               return;
@@ -1074,14 +1144,14 @@ function main() {
                               //entrytext += "-\n\n";
                             }
 
-                            mentries[nick].push(entrytext);
+                            mentries[nick][entry.created].push(entrytext);
                             console.log("Comments: " + (++promises_done) + "/" + promises.length + " (" + Object.keys(importantcomments).length + "/" + comments.length + "/" + node.edge_media_to_comment.count + ")");
                             resolve();
                           });
                 });
               })(entry, entrytext, mentries, nick));
             } else {
-              mentries[nick].push(entrytext);
+              mentries[nick][entry.created].push(entrytext);
             }
           }
         }
@@ -1093,7 +1163,13 @@ function main() {
           sorted_names.forEach((name) => {
             if (mentries[name].length <= 0)
               return;
-            sorted_entries.push("## " + name.toLowerCase() + "\n\n" + mentries[name].join("\n*****\n\n"));
+
+            var newarr = [];
+            Object.keys(mentries[name]).sort().forEach((key) => {
+              Array.prototype.push.apply(newarr, mentries[name][key]);
+            });
+
+            sorted_entries.push("## " + name.toLowerCase() + "\n\n" + newarr.join("\n*****\n\n"));
           });
           var sorted_text = sorted_entries.join("\n*****\n\n");
 

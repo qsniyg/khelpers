@@ -56,6 +56,12 @@ function get_videos() {
 }
 
 function upload_video_dm(options) {
+  if (noupload) {
+    console.dir(options);
+    process.exit();
+    return;
+  }
+
   var client = new DMClient(
     parse_feeds.feeds_toml.general.dailymotion_id,
     parse_feeds.feeds_toml.general.dailymotion_secret,
@@ -91,7 +97,7 @@ function upload_video_dm(options) {
           console.dir(err);
           notifier.notify({
             title: "[DM] Live error",
-            message: 'Error uploading live: ' + options.title + ' to dailymotion\nReason: ' + err
+            message: 'Error uploading live: ' + options.title + ' to dailymotion\nReason: ' + err.message
           });
         } else {
           notifier.notify({
@@ -108,7 +114,12 @@ function upload_video_dm(options) {
 }
 
 function upload_video_yt(options) {
-  console.log(options);
+  console.dir(options);
+
+  if (noupload) {
+    process.exit();
+    return;
+  }
 
   google_oauth(scopes, function(auth) {
     // https://github.com/google/google-api-nodejs-client/blob/master/samples/youtube/upload.js
@@ -150,6 +161,8 @@ function upload_video_yt(options) {
       }
 
       //process.exit();
+      if (ytupload)
+        process.exit();
       upload_video_dm(options);
     });
 
@@ -185,7 +198,9 @@ function create_timestamp(date) {
   return timestamp;
 }
 
-var dmupload = false;;
+var dmupload = false;
+var ytupload = false;
+var noupload = false;
 function main() {
   if (process.argv.length < 3) {
     console.log("Need filename");
@@ -193,8 +208,14 @@ function main() {
   }
 
   //var dmupload = false;
-  if (process.argv.length == 4 && process.argv[3] === "dm") {
-    dmupload = true;
+  if (process.argv.length == 4) {
+    if (process.argv[3] === "dm") {
+      dmupload = true;
+    } else if (process.argv[3] === "yt") {
+      ytupload = true;
+    } else if (process.argv[3] === "no") {
+      noupload = true;
+    }
   }
 
   var filename = process.argv[2];

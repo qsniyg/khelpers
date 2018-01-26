@@ -15,6 +15,11 @@ var db_content = db.get("content");
 module.exports.db_content = db_content;
 var path = require('path');
 
+var moment = require('moment-timezone');
+var tz_offset = 9; // KST
+var tz_name = "Asia/Seoul";
+moment.tz.setDefault(tz_name);
+
 var feeds_json;
 var feeds_toml;
 
