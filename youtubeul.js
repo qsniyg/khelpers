@@ -227,7 +227,7 @@ function main() {
     return;
   }
 
-  var username_str = matchobj[1];
+  var username_str = matchobj[1].toLowerCase();
   var date_str = matchobj[2];
   var date = new Date(date_str);
 
@@ -245,7 +245,7 @@ function main() {
       if (!member)
         continue;
 
-      if (member.obj.url.indexOf("/f/instagram/u/" + username_str) >= 0) {
+      if (member.obj.url.indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
         console.log(member);
 
         var name = "";

@@ -21,7 +21,10 @@ var tz_name = "Asia/Seoul";
 moment.tz.setDefault(tz_name);
 
 function reset_date(d) {
-  return moment(d).startOf("day").toDate();
+  var m = moment();
+  if (d)
+    m = moment(d);
+  return m.startOf("day").toDate();
   /*d.setUTCHours(tz_offset);
   d.setUTCMinutes(0);
   d.setUTCSeconds(0);
@@ -160,13 +163,32 @@ function comment_to_text(comment) {
   return text;
 }
 
-function escape_text(text) {
+function unescape_text(text) {
   return text
-    .replace(/\\/g, "\\\\")
-    .replace(/#/g, "\\#")
-    .replace(/_/g, "\\_")
-    .replace(/~/g, "\\~")
-    .replace(/\^/g, "\\^");
+    .replace(/\\\\/g, "\\")
+    .replace(/\\#/g, "#")
+    .replace(/\\_/g, "_")
+    .replace(/\\~/g, "~")
+    .replace(/\\\^/g, "^");
+}
+
+function escape_text(text) {
+  var newtext = text
+      .replace(/\\/g, "\\\\")
+      .replace(/#/g, "\\#")
+      .replace(/_/g, "\\_")
+      .replace(/~/g, "\\~")
+      .replace(/\^/g, "\\^");
+  var splitted = newtext.split(" ");
+  var newsplitted = [];
+  splitted.forEach((split) => {
+    if (split[0] === "@") {
+      newsplitted.push("[" + split + "](https://www.instagram.com/" + unescape_text(split.substr(1)) + "/)");
+    } else {
+      newsplitted.push(split)
+    }
+  });
+  return newsplitted.join(" ");
 }
 
 function quote_text(text) {
@@ -547,8 +569,10 @@ function update_file_main(filename, splitted) {
   var extra = {};
   var promises = [];
   for (var i = 0; i < splitted.length; i++) {
-    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram.com\//) &&
-        !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo.com\//)) {
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo\.com\//) &&
+        !splitted[i].match(/^https?:\/\/[^/.]*cdninstagram\.com\//) &&
+        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//)) {
       continue;
     }
 
@@ -560,6 +584,9 @@ function update_file_main(filename, splitted) {
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
       story = "story, ";
+    } else if ((splitted[i].search(/https?:\/\/[^/.]*cdninstagram\.com\//) >= 0) ||
+               (splitted[i].search(/https?:\/\/instagram\..*\.fbcdn\.net\//) >= 0)) {
+      story = "new profile ";
     }
 
     for (; i < splitted.length; i++) {
@@ -825,7 +852,7 @@ function main() {
     //create = false;
   } else {
     enddate = new Date();
-    enddate = reset_date(enddate);
+    enddate = reset_date(null);
     enddate = new Date(enddate - 1);
     end_timestamp = parse_feeds.create_timestamp(enddate);
   }
@@ -882,7 +909,7 @@ function main() {
         else
           instagram_username_names[member_username] = "";
 
-        instagram_username_names[member_username] += members[i].nicks[0].roman;
+        instagram_username_names[member_username] += members[i].nicks[0].roman_first;
       }
 
       var group_members = find_members_by_group(members, group);
@@ -915,14 +942,14 @@ function main() {
 
         var mcontent = {};
         for (var i = 0; i < content.length; i++) {
-          if (!(content[i].url in mcontent))
-            mcontent[content[i].url] = [];
-
           if ((content[i].created_at < startdate.getTime() ||
                content[i].created_at > enddate.getTime()) &&
               content[i].title.indexOf("[DP] ") < 0) {
             continue;
           }
+
+          if (!(content[i].url in mcontent))
+            mcontent[content[i].url] = [];
 
           mcontent[content[i].url].push(content[i]);
         }
@@ -1007,7 +1034,7 @@ function main() {
             if (entry.story) {
               entrytext += " - story\n";
             } else if (entry.dp) {
-              entrytext += " - profile photo\n";
+              entrytext += " - new profile photo\n";
             } else {
               entrytext += "\n";
             }
@@ -1026,6 +1053,8 @@ function main() {
             });
 
             var starting = "(" + date_to_isotime(mmember[x].created_at);
+            if (entry.dp)
+              starting += ") " + trim_text(text).substr(0, 50);
             var limages = [];
             var lvideos = [];
             items.forEach((item) => {
@@ -1079,19 +1108,26 @@ function main() {
               }
             }
 
-            if (!entry.story) {
+            if (!entry.story && !entry.dp) {
               promises.push((function(entry, entrytext, mentries, nick) {
                 return new Promise((resolve, reject) => {
                   //console.log(get_instagram_rssit_url(entry.url) + "&count=-1")
                   request(get_instagram_rssit_url(entry.url) + "&count=-1",
                           (error, response, body) => {
-                            if (response.statusCode === 500) {
+                            if (response.statusCode === 404) {
                               // deleted post
                               entrytext = entrytext.replace(/^(https?:\/\/[^/]*instagram.*\/p\/.*)$/m, "$1 - deleted");
                               mentries[nick][entry.created].push(entrytext);
-                              console.log("Comments: " + (++promises_done) + "/" + promises.length + " (n/a)");
+                              console.log("Comments: " + (++promises_done) + "/" + promises.length + " (deleted)");
                               resolve();
                               return;
+                            } else if (response.statusCode !== 200) {
+                              /*entrytext = entrytext.replace(/^(https?:\/\/[^/]*instagram.*\/p\/.*)$/m, "$1");
+                              mentries[nick][entry.created].push(entrytext);
+                              console.log("Comments: " + (++promises_done) + "/" + promises.length + " (server error)");
+                              resolve();
+                              return;*/
+                              console.log("server error, trying anyways");
                             }
 
                             /*console.log(entry);
