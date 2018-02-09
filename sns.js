@@ -15,6 +15,9 @@ var urljoin = require('url-join');
 var naturalSort = require('javascript-natural-sort');
 var wrap = require('word-wrap');
 var moment = require('moment-timezone');
+var twitter = require('twitter-text');
+var Twit = require('twit');
+var T;
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -170,6 +173,42 @@ function unescape_text(text) {
     .replace(/\\_/g, "_")
     .replace(/\\~/g, "~")
     .replace(/\\\^/g, "^");
+}
+
+function markdown_to_text(text) {
+  if (!text)
+    return text;
+
+  var newtext = "";
+  var lastline = undefined;
+  text.split("\n").forEach((line) => {
+    if (line[0] === ">")
+      line = line.substr(1);
+
+    line = trim_text(line);
+
+    if (line === "") {
+      if (lastline !== "") {
+        newtext += "\n";
+      }
+      lastline = line;
+      return;
+    }
+
+    lastline = line;
+
+    if (line === "-") {
+      return;
+    }
+
+    line = line.replace(/\[([^]]*)\]\([^)]*\)/, "$1");
+    newtext += unescape_text(line) + " ";
+  });
+  var newtext1 = [];
+  newtext.split("\n").forEach((line) => {
+    newtext1.push(trim_text(line));
+  });
+  return trim_text(newtext1.join("\n"));
 }
 
 function escape_text(text) {
@@ -369,11 +408,11 @@ function upload_video(video) {
                     }, (error, response, data) => {
                       if (error) {
                         console.log("ERROR");
-                        console.dir(err);
+                        console.dir(error);
                       }
                       //console.log("4");
                       //console.dir(data);
-                      resolve({"shortcode": shortcode});
+                      resolve({"shortcode": shortcode, "url": "https://streamable.com/" + shortcode});
                     });
                   }
                 });
@@ -542,6 +581,241 @@ function replace_lines(filename, splitted, extra, album) {
   console.log(filename + "_mod");
   fs.writeFileSync(filename + "_mod", newtext);
   spawn_editor(filename + "_mod");
+}
+
+function update_twitter_main(filename, splitted) {
+  T = new Twit({
+    consumer_key:         parse_feeds.feeds_toml.general.twitter_key,
+    consumer_secret:      parse_feeds.feeds_toml.general.twitter_secret,
+    access_token:         parse_feeds.feeds_toml.general.twitter_access,
+    access_token_secret:  parse_feeds.feeds_toml.general.twitter_access_secret,
+    timeout_ms:           60*1000,  // optional HTTP request timeout to apply to all requests.
+  });
+
+  var users = {};
+  var current_user = "";
+  var groupname = parse_feeds.parse_hangul_first(path.basename(filename).split("_")[0]);
+  for (var i = 0; i < splitted.length; i++) {
+    var userreg = splitted[i].match(/^## *(.*?) *$/);
+    if (userreg) {
+      current_user = userreg[1];
+      users[current_user] = [];
+      continue;
+    }
+
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//)) {
+      continue;
+    }
+
+    var url = splitted[i];
+
+    var origi = i;
+    i++;
+    var images = {};
+    var videos = {};
+    var story = "";
+
+    for (; i < splitted.length; i++) {
+      if (trim_text(splitted[i]).length === 0) {
+        break;
+      }
+
+      var file = expandHomeDir(splitted[i]);
+      if (!fs.existsSync(file)) {
+        console.error(file + " does not exist.");
+        continue;
+      } else {
+        var key = i;
+        /*console.log(story);
+        console.log(key);
+        console.log(origi);
+        console.log("");*/
+        if (story && key === (origi + 1)) {
+          key--;
+        }
+        if (file.endsWith(".jpg"))
+          images[key] = file;
+        else if (file.endsWith(".mp4"))
+          videos[key] = file;
+        else
+          console.error("Unknown extension for " + file);
+      }
+    }
+
+    var origtext = "";
+    var okenglish = false;
+    var engtext = undefined;
+
+    for (; i < splitted.length; i++) {
+      if (splitted[i].match(/^\*\*\*\*\*/) || splitted[i].match(/^\*comments\*/))
+        break;
+
+      if (splitted[i][0] === ">") {
+        if (engtext === undefined) {
+          origtext += splitted[i] + "\n";
+        } else {
+          engtext += splitted[i] + "\n";
+        }
+      } else if (splitted[i].match(/^english:/)) {
+        if (splitted[i].match(/^english: *$/)) {
+          okenglish = true;
+        } else {
+          okenglish = false;
+        }
+        engtext = "";
+      }
+    }
+
+    users[current_user].push({
+      "url": url,
+      "images": images,
+      "videos": videos,
+      "okenglish": okenglish,
+      "origtext": markdown_to_text(origtext),
+      "engtext": markdown_to_text(engtext)
+    });
+  }
+
+  for (var user in users) {
+    console.log(user);
+    users[user].forEach((item) => {
+      if (!item.engtext || !item.okenglish) {
+        console.log("Skipping due to lack of or bad quality english");
+        return;
+      }
+
+      var text = "[ig trans] ";
+      text += groupname.toLowerCase() + " " + user + ": " + item.url + "\n\n" + item.engtext;
+
+      var tweets = [];
+      var freetweets = [];
+      var currenttext = text;
+      while (true) {
+        currenttext = trim_text(currenttext);
+        var parsed = twitter.parseTweet(currenttext);
+        console.dir(parsed);
+        freetweets.push(tweets.length);
+        if (parsed.validRangeEnd !== parsed.displayRangeEnd) {
+          for (var i = parsed.validRangeEnd - 4; i >= 0; i--) {
+            if (currenttext[i].match(/[ \n\t.,!?#]/)) {
+              /*if (trim_text(currenttext[i]) === "") {
+                i--;
+              }*/
+              tweets.push({text:currenttext.substr(0, i) + " …"});
+              currenttext = "@" + parse_feeds.feeds_toml.general.twitter_username + " " + currenttext.substr(i);
+              break;
+            }
+          }
+        } else {
+          tweets.push({text:currenttext});
+          break;
+        }
+      }
+
+      var images = [];
+      for (var image in item.images) {
+        images.push(item.images[image]);
+      }
+
+      var videos = [];
+      for (var video in item.videos) {
+        videos.push(item.videos[video]);
+      }
+
+      var addtweet = function(obj) {
+        if (freetweets.length > 0) {
+          for (var x in obj) {
+            tweets[freetweets[0]][x] = obj[x];
+          }
+          freetweets = freetweets.unshift();
+        } else {
+          obj["text"] = "[continued]";
+          tweets.push(obj);
+        }
+      };
+
+      for (var i = 0; i < images.length; i += 4) {
+        addtweet({images: images.slice(i, i + 4)});
+      }
+
+      for (var i = 0; i < videos.length; i++) {
+        addtweet({videos: videos[i]});
+      }
+
+      if (tweets.length > 1 && images.length === 10){
+        console.dir(tweets);
+        do_tweets(tweets);
+      }
+    });
+  }
+}
+
+function do_tweets(tweets) {
+  console.log("-------");
+  console.log(tweets);
+  console.log("-------");
+
+  var do_tweet = function(x, tweetid) {
+    if (tweets[x] === undefined) {
+      console.log("Finished");
+      return;
+    }
+
+    var media_promises = [];
+    var medias = {};
+
+    var upload_media = function(i, x) {
+      return new Promise((resolve, reject) => {
+        T.postMediaChunked({file_path: x}, function(err, data, response) {
+          if (err) {
+            console.log("Error uploading media " + x);
+            console.log(err);
+            reject(err);
+            return;
+          }
+
+          medias[i] = data;
+          resolve(data);
+        });
+      });
+    };
+
+    if (tweets[x].images) {
+      for (var i = 0; i < tweets[x].images.length; i++) {
+        media_promises.push(upload_media(i, tweets[x].images[i]));
+      }
+    } else if (tweets[x].videos) {
+      for (var i = 0; i < tweets[x].videos.length; i++) {
+        media_promises.push(upload_media(i, tweets[x].videos[i]));
+      }
+    }
+
+    Promise.all(media_promises).then(() => {
+      var mediaids = [];
+      if (Object.keys(medias).length == 0)
+        mediaids = null;
+      else {
+        var keys_sorted = Object.keys(medias).sort();
+        keys_sorted.forEach((key) => {
+          mediaids.push(medias[key].media_id_string);
+        });
+      }
+      T.post('statuses/update', {
+        'status': tweets[x].text,
+        'in_reply_to_status_id': tweetid,
+        media_ids: mediaids
+      }).then(
+        (result) => {
+          do_tweet(x + 1, result.data.id_str);
+        },
+        (err) => {
+          console.log("Error updating status");
+          console.log(err);
+        }
+      );
+    });
+  };
+  do_tweet(0, null);
 }
 
 function update_file_main(filename, splitted) {
@@ -753,6 +1027,12 @@ function update_file_main(filename, splitted) {
   });
 }
 
+function update_twitter(filename) {
+  var contents = fs.readFileSync(filename).toString('utf8');
+  var splitted = contents.split("\n");
+  return update_twitter_main(filename, splitted);
+}
+
 function update_file(filename) {
   var contents = fs.readFileSync(filename).toString('utf8');
   var splitted = contents.split("\n");
@@ -840,7 +1120,8 @@ function main() {
   var enddate;
   var end_timestamp;
   var create = true;
-  if (process.argv.length == 5) {
+  var tw = false;
+  if (process.argv.length >= 5) {
     var enddate_timestamp = process.argv[4];
     if (enddate_timestamp[0] === "-") {
       enddate_timestamp = enddate_timestamp.substr(1);
@@ -849,6 +1130,14 @@ function main() {
     }
     end_timestamp = enddate_timestamp;
     enddate = parse_timestamp(end_timestamp);
+    if (process.argv.length === 6) {
+      if (process.argv[5] === "tw") {
+        console.log("Twitter");
+        tw = true;
+      } else {
+        console.log("Not twitter?");
+      }
+    }
     //create = false;
   } else {
     enddate = new Date();
@@ -864,6 +1153,15 @@ function main() {
       var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
       var filename = path.join(basedir, basename);
       console.log(filename);
+
+      if (tw) {
+        if (!fs.existsSync(filename)) {
+          console.log(filename + " doesn't exist");
+        }
+        parse_feeds.db.close();
+        update_twitter(filename);
+        return;
+      }
 
       if (!create) {
         if (!fs.existsSync(filename)) {
