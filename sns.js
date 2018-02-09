@@ -201,7 +201,7 @@ function markdown_to_text(text) {
       return;
     }
 
-    line = line.replace(/\[([^]]*)\]\([^)]*\)/, "$1");
+    line = line.replace(/\[(.*?)]\([^)]*\)/g, "$1");
     newtext += unescape_text(line) + " ";
   });
   var newtext1 = [];
@@ -675,6 +675,8 @@ function update_twitter_main(filename, splitted) {
       "engtext": markdown_to_text(engtext)
     });
   }
+  //console.dir(users);
+  //return;
 
   for (var user in users) {
     console.log(user);
@@ -693,7 +695,7 @@ function update_twitter_main(filename, splitted) {
       while (true) {
         currenttext = trim_text(currenttext);
         var parsed = twitter.parseTweet(currenttext);
-        console.dir(parsed);
+        //console.dir(parsed);
         freetweets.push(tweets.length);
         if (parsed.validRangeEnd !== parsed.displayRangeEnd) {
           for (var i = parsed.validRangeEnd - 4; i >= 0; i--) {
@@ -739,13 +741,13 @@ function update_twitter_main(filename, splitted) {
       }
 
       for (var i = 0; i < videos.length; i++) {
-        addtweet({videos: videos[i]});
+        addtweet({videos: [videos[i]]});
       }
 
-      if (tweets.length > 1 && images.length === 10){
-        console.dir(tweets);
-        do_tweets(tweets);
-      }
+      //if (tweets.length > 1 && images.length === 10){
+      console.dir(tweets);
+      do_tweets(tweets);
+    //}
     });
   }
 }
