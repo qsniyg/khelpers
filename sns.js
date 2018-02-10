@@ -603,7 +603,7 @@ function update_twitter_main(filename, splitted) {
       continue;
     }
 
-    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//)) {
+    if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//)) {
       continue;
     }
 
@@ -687,24 +687,34 @@ function update_twitter_main(filename, splitted) {
       }
 
       var text = "[ig trans] ";
-      text += groupname.toLowerCase() + " " + user + ": " + item.url + "\n\n" + item.engtext;
+      var usertext = groupname.toLowerCase() + " " + user;
+      if (user === groupname.toLowerCase())
+        usertext = groupname.toLowerCase();
+
+      text += usertext + ": " + item.url + "\n\n" + item.engtext;
 
       var tweets = [];
       var freetweets = [];
-      var currenttext = text;
+      // https://github.com/twitter/twitter-text/blob/master/js/src/regexp/invalidCharsGroup.js
+      var currenttext = text.normalize().replace(/[\uFFFE\uFEFF\uFFFF\u202A-\u202E]/g, "");
       while (true) {
         currenttext = trim_text(currenttext);
+        /*for (var i = 0; i < currenttext.length; i++) {
+          console.log(currenttext.charAt(i));
+          console.log(currenttext.charCodeAt(i));
+        }*/
         var parsed = twitter.parseTweet(currenttext);
         //console.dir(parsed);
         freetweets.push(tweets.length);
         if (parsed.validRangeEnd !== parsed.displayRangeEnd) {
+          //console.log(currenttext.substr(0, parsed.validRangeEnd));
           for (var i = parsed.validRangeEnd - 4; i >= 0; i--) {
             if (currenttext[i].match(/[ \n\t.,!?#]/)) {
               /*if (trim_text(currenttext[i]) === "") {
                 i--;
-              }*/
+                }*/
               tweets.push({text:currenttext.substr(0, i) + " …"});
-              currenttext = "@" + parse_feeds.feeds_toml.general.twitter_username + " " + currenttext.substr(i);
+              currenttext = "@" + parse_feeds.feeds_toml.general.twitter_username + " " + trim_text(currenttext.substr(i));
               break;
             }
           }
@@ -1147,6 +1157,8 @@ function main() {
     enddate = new Date(enddate - 1);
     end_timestamp = parse_feeds.create_timestamp(enddate);
   }
+
+  console.log("From " + startdate + " to " + enddate);
 
   var basename = group + "_" + timestamp + "_" + end_timestamp + ".txt";
 
