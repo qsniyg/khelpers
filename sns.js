@@ -645,7 +645,7 @@ function update_twitter_main(filename, splitted) {
     }
 
     var origtext = "";
-    var okenglish = false;
+    var okenglish = true;
     var engtext = undefined;
 
     for (; i < splitted.length; i++) {
@@ -683,17 +683,26 @@ function update_twitter_main(filename, splitted) {
   for (var user in users) {
     console.log(user);
     users[user].forEach((item) => {
-      if (!item.engtext || !item.okenglish) {
-        console.log("Skipping due to lack of or bad quality english");
+      if (!item.okenglish) {
+        console.log("Skipping due to poor quality english");
         return;
       }
 
       var text = "[ig trans] ";
+      if (!item.engtext) {
+        text = "[ig] ";
+      }
       var usertext = groupname.toLowerCase() + " " + user;
       if (user === groupname.toLowerCase())
         usertext = groupname.toLowerCase();
 
-      text += usertext + ": " + item.url + "\n\n" + item.engtext;
+      text += usertext + ": " + item.url + "\n\n";
+
+      if (item.engtext) {
+        text += item.engtext;
+      } else {
+        text += item.origtext;
+      }
 
       var tweets = [];
       var freetweets = [];
