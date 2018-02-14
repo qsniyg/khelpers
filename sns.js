@@ -172,6 +172,7 @@ function unescape_text(text) {
     .replace(/\\#/g, "#")
     .replace(/\\_/g, "_")
     .replace(/\\~/g, "~")
+    .replace(/\\\*/g, "*")
     .replace(/\\\^/g, "^");
 }
 
@@ -217,6 +218,7 @@ function escape_text(text) {
       .replace(/#/g, "\\#")
       .replace(/_/g, "\\_")
       .replace(/~/g, "\\~")
+      .replace(/\*/g, "\\*")
       .replace(/\^/g, "\\^");
   var splitted = newtext.split(" ");
   var newsplitted = [];
@@ -647,7 +649,7 @@ function update_twitter_main(filename, splitted) {
     var engtext = undefined;
 
     for (; i < splitted.length; i++) {
-      if (splitted[i].match(/^\*\*\*\*\*/) || splitted[i].match(/^\*comments\*/))
+      if (splitted[i].match(/^\*\*\*\*\*/) || splitted[i].match(/^\*comments/))
         break;
 
       if (splitted[i][0] === ">") {
@@ -756,7 +758,11 @@ function update_twitter_main(filename, splitted) {
 
       //if (tweets.length > 1 && images.length === 10){
       console.dir(tweets);
-      do_tweets(tweets);
+      try {
+        do_tweets(tweets);
+      } catch (e) {
+        console.dir(e);
+      }
     //}
     });
   }
@@ -870,8 +876,8 @@ function update_file_main(filename, splitted) {
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
       story = "story, ";
-    } else if ((splitted[i].search(/https?:\/\/[^/.]*cdninstagram\.com\//) >= 0) ||
-               (splitted[i].search(/https?:\/\/instagram\..*\.fbcdn\.net\//) >= 0)) {
+    } else if ((splitted[i-1].search(/https?:\/\/[^/.]*cdninstagram\.com\//) >= 0) ||
+               (splitted[i-1].search(/https?:\/\/instagram\..*\.fbcdn\.net\//) >= 0)) {
       story = "new profile ";
     }
 
@@ -1225,6 +1231,12 @@ function main() {
       }
 
       var group_members = find_members_by_group(members, group);
+      if (group_members.length === 0) {
+        console.log("No group members");
+        parse_feeds.db.close();
+        return;
+      }
+
       var urls = [];
       for (var i = 0; i < group_members.length; i++) {
         urls.push(group_members[i].obj.url);
@@ -1502,6 +1514,11 @@ function main() {
               mentries[nick][entry.created].push(entrytext);
             }
           }
+        }
+
+        if (promises.length === 0) {
+          console.log("Nothing to do");
+          return;
         }
 
         Promise.all(promises).then(() => {

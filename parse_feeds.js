@@ -348,17 +348,20 @@ function get_name(text, username) {
       ret.nicks.push(parse_hangul_obj(x, false, alt));
     });
   } else {
-    if (text.length > 2 && is_hangul(text.charCodeAt(0)) && get_user_nick(text) !== false) {
-      var splitted = text.split("/");
-      splitted.forEach((x) => {
-        ret.names.push(parse_name_obj(x, alt));
-        ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
-      });
-      /*ret.names.push(parse_name_obj(text));
-      ret.nicks.push(parse_hangul_obj(text.slice(1)));*/
-    } else {
-      ret.nicks.push(parse_hangul_obj(text, false, alt));
-    }
+    var splitted = text.split("/");
+    splitted.forEach((x) => {
+      if (x.length > 2 && is_hangul(x.charCodeAt(0)) && get_user_nick(x) !== false) {
+        /*var splitted = x.split("/");
+        splitted.forEach((x) => {
+          ret.names.push(parse_name_obj(x, alt));
+          ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
+        });*/
+        ret.names.push(parse_name_obj(x));
+        ret.nicks.push(parse_hangul_obj(x.slice(1)));
+      } else {
+        ret.nicks.push(parse_hangul_obj(x, false, alt));
+      }
+    });
   }
 
   return ret;
