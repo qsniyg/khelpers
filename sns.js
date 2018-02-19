@@ -173,6 +173,7 @@ function unescape_text(text) {
     .replace(/\\_/g, "_")
     .replace(/\\~/g, "~")
     .replace(/\\\*/g, "*")
+    .replace(/\\\./g, ".")
     .replace(/\\\^/g, "^");
 }
 
@@ -219,6 +220,7 @@ function escape_text(text) {
       .replace(/_/g, "\\_")
       .replace(/~/g, "\\~")
       .replace(/\*/g, "\\*")
+      .replace(/\./g, "\\.")
       .replace(/\^/g, "\\^");
   var splitted = newtext.split(" ");
   var newsplitted = [];
@@ -605,17 +607,23 @@ function update_twitter_main(filename, splitted) {
       continue;
     }
 
-    if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//)) {
+    if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//) &&
+        splitted[i].indexOf("://guid.instagram.com") < 0) {
       continue;
     }
 
-    var url = splitted[i];
+    var url = splitted[i].replace(/ +- +.*/, "");
 
     var origi = i;
     i++;
     var images = {};
     var videos = {};
     var story = "";
+
+    if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
+      url = "";
+      story = " story";
+    }
 
     for (; i < splitted.length; i++) {
       if (trim_text(splitted[i]).length === 0) {
@@ -632,9 +640,9 @@ function update_twitter_main(filename, splitted) {
         console.log(key);
         console.log(origi);
         console.log("");*/
-        if (story && key === (origi + 1)) {
+        /*if (story && key === (origi + 1)) {
           key--;
-        }
+        }*/
         if (file.endsWith(".jpg"))
           images[key] = file;
         else if (file.endsWith(".mp4"))
@@ -649,7 +657,9 @@ function update_twitter_main(filename, splitted) {
     var engtext = undefined;
 
     for (; i < splitted.length; i++) {
-      if (splitted[i].match(/^\*\*\*\*\*/) || splitted[i].match(/^\*comments/))
+      if (splitted[i].match(/^\*\*\*\*\*/) ||
+          splitted[i].match(/^\*comments/) ||
+          splitted[i].match(/^\*/))
         break;
 
       if (splitted[i][0] === ">") {
@@ -670,6 +680,7 @@ function update_twitter_main(filename, splitted) {
 
     users[current_user].push({
       "url": url,
+      "story": story,
       "images": images,
       "videos": videos,
       "okenglish": okenglish,
@@ -688,15 +699,21 @@ function update_twitter_main(filename, splitted) {
         return;
       }
 
-      var text = "[ig trans] ";
-      if (!item.engtext) {
-        text = "[ig] ";
+      var text = "[ig";
+      if (item.story)
+        text += item.story;
+      if (item.engtext) {
+        text += " trans";
       }
+      text += "] ";
       var usertext = groupname.toLowerCase() + " " + user;
       if (user === groupname.toLowerCase())
         usertext = groupname.toLowerCase();
 
-      text += usertext + ": " + item.url + "\n\n";
+      text += usertext;
+      if (item.url)
+        text += ": " + item.url;
+      text += "\n\n";
 
       if (item.engtext) {
         text += item.engtext;
@@ -784,7 +801,11 @@ function do_tweets(tweets) {
 
   var do_tweet = function(x, tweetid) {
     if (tweets[x] === undefined) {
-      console.log("Finished");
+      if ((x + 1) < tweets.length) {
+        console.log("Unable to post every tweet (" + (x + 1) + ")");
+      } else {
+        console.log("Finished");
+      }
       return;
     }
 
@@ -1525,12 +1546,12 @@ function main() {
           }
         }
 
-        if (promises.length === 0) {
-          console.log("Nothing to do");
-          return;
-        }
-
         Promise.all(promises).then(() => {
+          if (mentries.length === 0) {
+            console.log("Nothing to do");
+            return;
+          }
+
           var sorted_names = Object.keys(mentries).sort();
           var sorted_entries = [];
 

@@ -296,7 +296,8 @@ function get_name(text, username) {
 
   var ret = {
     "names": [],
-    "nicks": []
+    "nicks": [],
+    "has_user_nick": false
   };
 
   if (text[0] === "@") {
@@ -345,6 +346,7 @@ function get_name(text, username) {
 
     ssplitted = splitted[1].replace(/^\(/, "").replace(/\)$/, "").split("/");
     ssplitted.forEach((x) => {
+      ret.has_user_nick = true;
       ret.nicks.push(parse_hangul_obj(x, false, alt));
     });
   } else {
@@ -356,8 +358,8 @@ function get_name(text, username) {
           ret.names.push(parse_name_obj(x, alt));
           ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
         });*/
-        ret.names.push(parse_name_obj(x));
-        ret.nicks.push(parse_hangul_obj(x.slice(1)));
+        ret.names.push(parse_name_obj(x, alt));
+        ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
       } else {
         ret.nicks.push(parse_hangul_obj(x, false, alt));
       }

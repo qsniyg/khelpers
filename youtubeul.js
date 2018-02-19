@@ -263,7 +263,7 @@ function main() {
           else
             name += member.alt;
         } else {
-          if (member.nicks && member.nicks[0])
+          if (member.nicks && member.nicks[0] && member.has_user_nick)
             name += member.nicks[0].roman;
           else if (member.names && member.names[0])
             name += member.names[0].roman;
