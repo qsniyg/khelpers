@@ -599,6 +599,7 @@ function update_twitter_main(filename, splitted) {
   var users = {};
   var current_user = "";
   var groupname = parse_feeds.parse_hangul_first(path.basename(filename).split("_")[0]);
+  var grouplower = groupname.toLowerCase();
   for (var i = 0; i < splitted.length; i++) {
     var userreg = splitted[i].match(/^## *(.*?) *$/);
     if (userreg) {
@@ -704,11 +705,22 @@ function update_twitter_main(filename, splitted) {
         text += item.story;
       if (item.engtext) {
         text += " trans";
+      } else if (parse_feeds.feeds_toml.general.all_sns_group.indexOf(grouplower) < 0) {
+        console.log("Skipping due to lack of english");
+        return;
       }
       text += "] ";
-      var usertext = groupname.toLowerCase() + " " + user;
-      if (user === groupname.toLowerCase())
-        usertext = groupname.toLowerCase();
+
+      var usertext = "";
+
+      if (user.match(/\(.*'s/)) {
+        // family member
+        usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
+      } else {
+        usertext = groupname.toLowerCase() + " " + user;
+        if (user === groupname.toLowerCase())
+          usertext = groupname.toLowerCase();
+      }
 
       text += usertext;
       if (item.url)
@@ -764,10 +776,12 @@ function update_twitter_main(filename, splitted) {
 
       var addtweet = function(obj) {
         if (freetweets.length > 0) {
+          console.dir(freetweets);
           for (var x in obj) {
             tweets[freetweets[0]][x] = obj[x];
           }
-          freetweets = freetweets.unshift();
+          //freetweets = freetweets.unshift();
+          freetweets = freetweets.slice(1);
         } else {
           obj["text"] = "[continued]";
           tweets.push(obj);
@@ -1252,12 +1266,18 @@ function main() {
         if (!members[i].nicks)
           continue;
 
-        if (members[i].group && members[i].group !== group)
-          instagram_username_names[member_username] = parse_feeds.parse_hangul_first(members[i].group) + " ";
-        else
+        /*if ((members[i].group && members[i].group !== group) ||
+            !members[i].group) {
+          instagram_username_names[member_username] = members[i].title.toLowerCase();
+          //instagram_username_names[member_username] = parse_feeds.parse_hangul_first(members[i].group) + " ";
+        } else {
           instagram_username_names[member_username] = "";
-
-        instagram_username_names[member_username] += members[i].nicks[0].roman_first;
+          instagram_username_names[member_username] += members[i].nicks[0].roman_first;
+          }*/
+        instagram_username_names[member_username] = parse_feeds.strip(members[i].title.toLowerCase()
+                                                                      .replace(parse_feeds.parse_hangul_first(group).toLowerCase(), "")
+                                                                      .replace(/\( */, "(")
+                                                                      .replace(/ex-/, ""));
       }
 
       var group_members = find_members_by_group(members, group);
@@ -1315,7 +1335,8 @@ function main() {
           var nick;
           for (var x = 0; x < group_members.length; x++) {
             if (group_members[x].obj.url === member_url) {
-              nick = group_members[x].nicks[0].roman_first;
+              //nick = group_members[x].nicks[0].roman_first;
+              nick = instagram_username_names[get_username_from_rssit_url(member_url)];
             }
           }
 

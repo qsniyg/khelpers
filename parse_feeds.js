@@ -270,6 +270,8 @@ function parse_name(text, obj) {
     lastname = "Choi";
   } else if (text[0] === "권") {
     lastname = "Kwon";
+  } else if (text[0] === "추") {
+    lastname = "Chu";
   }
   var retval = lastname + " " + parse_hangul(text.slice(1), false, obj);
   //console.log(text);
@@ -289,6 +291,7 @@ function parse_name_obj(text, obj) {
 function strip(x) {
   return x.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
 }
+module.exports.strip = strip;
 
 function get_name(text, username) {
   if (text.length < 2)
@@ -336,6 +339,7 @@ function get_name(text, username) {
     }
   }
 
+  ret.comment = strip(text.replace(/.*# *(.*)$/, "$1"));
   text = strip(text.replace(/#.*$/, ""));
   if (text.indexOf(" ") >= 0) {
     var splitted = text.split(" ");
@@ -414,6 +418,10 @@ function parse_member(obj, options) {
     return;
 
   member.alt = obj.name;
+  var member_comment = strip(member.alt.replace(/.*# */, ""));
+  if (member_comment !== strip(member.alt))
+    member.comment = member_comment;
+
   var username = get_username_from_rssit_url(obj.url);
   if (username && username != obj.url) {
     member.username = username;
@@ -433,6 +441,10 @@ function parse_member(obj, options) {
 
     if (options.ex) {
       member.ex = options.ex;
+    }
+
+    if (options.family) {
+      member.family = options.family;
     }
   }
 
@@ -481,6 +493,54 @@ function parse_member(obj, options) {
       upush(member.tags, name.roman);
     });
   }
+
+  var grouptitle = "";
+  var title = "";
+  if (member.group) {
+    if (member.ex) {
+      grouptitle = "Ex-";
+    }
+
+    grouptitle += parse_hangul_first(member.group) + " ";
+
+    if (member.family) {
+      if (member.nicks && member.nicks[0] && member.has_user_nick)
+        title += member.nicks[0].roman;
+      else if (member.names && member.names[0])
+        title += member.names[0].roman;
+      else
+        title += member.alt;
+
+      var comment = member.comment
+          .replace("의", "'s")
+          .replace("언니", "sister")
+          .replace("누나", "sister")
+          .replace("여동생", "sister")
+          .replace("오빠", "brother")
+          .replace("형", "brother")
+          .replace("남동생", "brother");
+      var comment_name = parse_hangul_first(comment.replace(/'s.*/, ""));
+      title += " (" + grouptitle + comment_name + comment.replace(/.*'s/, "'s") + ")";
+    } else {
+      title += grouptitle;
+
+      if (member.nicks && member.nicks[0])
+        title += member.nicks[0].roman;
+      else if (member.names && member.names[0])
+        title += member.names[0].roman;
+      else
+        title += member.alt;
+    }
+  } else {
+    if (member.nicks && member.nicks[0] && member.has_user_nick)
+      title += member.nicks[0].roman;
+    else if (member.names && member.names[0])
+      title += member.names[0].roman;
+    else
+      title += member.alt;
+  }
+
+  member.title = title;
 
   return member;
 }
@@ -537,6 +597,11 @@ function parse_feeds_inner() {
                 var exes = flatten_obj(member_obj);
                 for (var ex in exes) {
                   members.push(parse_member(exes[ex], {ex: true, group: group}));
+                }
+              } else if (member === "가족") {
+                var family = flatten_obj(member_obj);
+                for (var f in family) {
+                  members.push(parse_member(family[f], {family: true, group: group}));
                 }
               }
               members.push(parse_member(member_obj, {group: group}));
