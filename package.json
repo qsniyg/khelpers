@@ -1,0 +1,29 @@
+{
+  "name": "khelpers",
+  "version": "0.1.0",
+  "dependencies": {
+    "chance": "^1.0.13",
+    "cheerio": "^1.0.0-rc.2",
+    "dailymotion-sdk": "^0.1.13",
+    "dotenv": "^5.0.1",
+    "expand-home-dir": "0.0.3",
+    "googleapis": "^23.0.0",
+    "imgur": "^0.2.1",
+    "imgur-node-api": "^0.1.0",
+    "javascript-natural-sort": "^0.7.1",
+    "kroman": "^1.0.1",
+    "moment-timezone": "^0.5.14",
+    "monk": "^6.0.5",
+    "node-notifier": "^5.1.2",
+    "readline-sync": "^1.4.7",
+    "request": "^2.83.0",
+    "request-debug": "^0.2.0",
+    "simple-encryptor": "^1.1.1",
+    "snoowrap": "^1.15.2",
+    "toml": "^2.3.3",
+    "twit": "^2.2.9",
+    "twitter-text": "^2.0.4",
+    "url-join": "^2.0.5",
+    "word-wrap": "^1.2.3"
+  }
+}

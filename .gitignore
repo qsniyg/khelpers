@@ -1,4 +1,4 @@
-*.json
+client_secret.json
 *.toml
 node_modules
 *~
