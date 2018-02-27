@@ -2,3 +2,6 @@
 *.toml
 node_modules
 *~
+*.env*
+.env
+

@@ -18,6 +18,9 @@ var moment = require('moment-timezone');
 var twitter = require('twitter-text');
 var Twit = require('twit');
 var T;
+const Snoowrap = require('snoowrap');
+
+require('dotenv').config();
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -34,11 +37,16 @@ function reset_date(d) {
   d.setUTCMilliseconds(0);*/
 }
 
-function parse_timestamp(timestamp) {
+function parse_timestamp(timestamp, end) {
   /*var d = new Date();
     d = reset_date(d);*/
 
-  var m = moment().startOf("day");
+  var m;
+
+  if (!end)
+    m = moment().startOf("day");
+  else
+    m = moment().endOf("day");
 
   var year = parseInt("20" + timestamp.slice(0, 2), 10);
   //d.setUTCFullYear(year);
@@ -894,6 +902,199 @@ function do_tweets(tweets) {
   do_tweet(0, null);
 }
 
+function update_reddit(filename) {
+  var contents = fs.readFileSync(filename).toString('utf8');
+  var splitted = contents.split("\n");
+
+  var fn_split = path.basename(filename).split("_");
+
+  var group_hangul = fn_split[0];
+  var groupname = parse_feeds.parse_hangul_first(group_hangul);
+
+  var start = fn_split[1];
+  var end = fn_split[2].replace(/[^0-9]*/g, "");
+
+  var timestr = start;
+
+  if (start !== end) {
+    var newend = end;
+
+    if (start.substr(0, 2) === end.substr(0, 2))
+      newend = end.substr(2);
+
+    if (start.substr(2, 2) === end.substr(2, 2))
+      newend = end.substr(4);
+
+    timestr = start + "-" + newend;
+  }
+
+  var usernames = {};
+  var hasfamily = false;
+  var onlyone = true;
+  var instagram_count = 0;
+  var lastlink = null;
+  var lastinstagram = null;
+  var titlelink = null;
+  var nextlink = true;
+
+  var newsplitted = [];
+
+  for (var i = 0; i < splitted.length; i++) {
+    if (lastlink !== null) {
+      newsplitted.push(splitted[i]);
+    }
+
+    if (splitted[i].startsWith("*****")) {
+      onlyone = false;
+      nextlink = true;
+      continue;
+    }
+
+    if (nextlink && splitted[i].startsWith("http")) {
+      lastlink = splitted[i].replace(/ +-.*/, "");
+      if (splitted[i].replace(/.* +-/, "").indexOf("title") >= 0)
+        titlelink = lastlink;
+      if (splitted[i].indexOf("www.instagram.com") >= 0) {
+        instagram_count++;
+        lastinstagram = lastlink;
+      }
+
+      nextlink = false;
+      continue;
+    }
+
+    if (!splitted[i].startsWith("##"))
+      continue;
+
+    if (splitted[i].match(/\(.*'s/)) {
+      // family
+      hasfamily = true;
+    } else {
+      usernames[splitted[i].replace(/.*\(http.*?\/([^/]*)\/\).*/, "$1")] = true;
+    }
+  }
+
+  if (!onlyone) {
+    newsplitted = splitted;
+  } else {
+    console.log("Only one");
+    var i;
+    for (i = 0; i < newsplitted.length; i++) {
+      if (parse_feeds.strip(newsplitted[i])) {
+        break;
+      }
+    }
+    newsplitted = newsplitted.slice(i);
+  }
+
+  if (instagram_count < 2 && !titlelink) {
+    if (lastinstagram)
+      titlelink = lastinstagram;
+    else if (onlyone)
+      titlelink = lastlink;
+  }
+
+  var users = {};
+  var forcegroup = false;
+
+  var group_members = find_members_by_group(parse_feeds.members, group_hangul);
+  for (var i = 0; i < group_members.length; i++) {
+    var username = get_username_from_rssit_url(group_members[i].obj.url);
+    if (username.toLowerCase() === groupname.toLowerCase())
+      forcegroup = true;
+    if (username in usernames)
+      users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
+  }
+
+  var prefix = groupname;
+  if (Object.keys(users).length <= 3 && !forcegroup) {
+    var userarr = [];
+    for (var user in users) {
+      userarr.push(user);
+    }
+    prefix = userarr.join(", ");
+    if (hasfamily)
+      prefix += " + Family";
+  }
+
+  var updates;
+
+  if (lastinstagram) {
+    if (onlyone) {
+      updates = "Update";
+    } else {
+      updates = "Updates";
+    }
+  } else {
+    if (onlyone) {
+      updates = "Story";
+    } else {
+      updates = "Stories";
+    }
+  }
+
+  var title = prefix + " Instagram " + updates + " [" + timestr + "]";
+  console.log(title);
+
+  var reddit = parse_feeds.feeds_toml.reddit[group_hangul];
+  if (!reddit) {
+    console.log("No reddit configured for " + group_hangul);
+    return;
+  }
+  console.log ("/r/" + reddit);
+
+  var key = parse_feeds.feeds_toml.general.encrypt_key;
+  var encryptor = require('simple-encryptor')(key);
+  var reddit_password = encryptor.decrypt(process.env.REDDIT_PASSWORD);
+
+  const r = new Snoowrap({
+    userAgent: 'pc:khelpers:v0.0.1',
+    clientId: process.env.REDDIT_CLIENT_ID,
+    clientSecret: process.env.REDDIT_CLIENT_SECRET,
+    username: process.env.REDDIT_USERNAME,
+    password: reddit_password
+  });
+
+  if (!titlelink) {
+    console.log("Need title link");
+    return;
+  } else {
+    console.log(titlelink);
+  }
+
+  var subreddit = r.getSubreddit(reddit);
+  var submitted = subreddit
+      .submitLink({
+        title: title,
+        url: titlelink
+      });
+  var replied = submitted.reply(newsplitted.join("\n"));
+  try {
+    submitted.approve();
+  } catch (e) {
+    console.log("Failed to approve");
+  }
+
+  // doesn't work
+  /*var flair = parse_feeds.feeds_toml.flairs[group_hangul];
+  if (flair) {
+    subreddit.getLinkFlairTemplates().then((templates) => {
+      var found = false;
+      for (var i = 0; i < templates.length; i++) {
+        if (templates[i].flair_text === flair) {
+          found = true;
+          submitted.selectFlair({flair_template_id: templates[i].flair_template_id});
+          break;
+        }
+      }
+      if (!found) {
+        console.log("Flair not found:");
+        console.dir(templates);
+      }
+    });
+  }*/
+}
+
 function update_file_main(filename, splitted) {
   var key = parse_feeds.feeds_toml.general.encrypt_key;
   var encryptor = require('simple-encryptor')(key);
@@ -1171,6 +1372,13 @@ function update_file(filename) {
   });
 }
 
+function parse_name_from_title(title, group) {
+  return parse_feeds.strip(title
+                           .replace(parse_feeds.parse_hangul_first(group), "")
+                           .replace(/\( */, "(")
+                           .replace(/Ex-/, ""));
+}
+
 function main() {
   if (process.argv.length < 4) {
     console.log("groupname start_timestamp");
@@ -1197,6 +1405,7 @@ function main() {
   var end_timestamp;
   var create = true;
   var tw = false;
+  var reddit = false;
   if (process.argv.length >= 5) {
     var enddate_timestamp = process.argv[4];
     if (enddate_timestamp[0] === "-") {
@@ -1205,13 +1414,16 @@ function main() {
       create = false;
     }
     end_timestamp = enddate_timestamp;
-    enddate = parse_timestamp(end_timestamp);
+    enddate = parse_timestamp(end_timestamp, true);
     if (process.argv.length === 6) {
       if (process.argv[5] === "tw") {
         console.log("Twitter");
         tw = true;
+      } else if (process.argv[5] === "re") {
+        console.log("Reddit");
+        reddit = true;
       } else {
-        console.log("Not twitter?");
+        console.log("Not twitter/reddit?");
       }
     }
     //create = false;
@@ -1220,6 +1432,16 @@ function main() {
     enddate = reset_date(null);
     enddate = new Date(enddate - 1);
     end_timestamp = parse_feeds.create_timestamp(enddate);
+  }
+
+  if (enddate < startdate) {
+    console.log("enddate < startdate");
+    return;
+  }
+
+  if (enddate > new Date()) {
+    console.log("enddate > now");
+    return;
   }
 
   console.log("From " + startdate + " to " + enddate);
@@ -1238,6 +1460,13 @@ function main() {
         }
         parse_feeds.db.close();
         update_twitter(filename);
+        return;
+      } else if (reddit) {
+        if (!fs.existsSync(filename + "_mod")) {
+          console.log(filename + "_mod doesn't exist");
+        }
+        parse_feeds.db.close();
+        update_reddit(filename + "_mod");
         return;
       }
 
@@ -1288,10 +1517,11 @@ function main() {
           instagram_username_names[member_username] = "";
           instagram_username_names[member_username] += members[i].nicks[0].roman_first;
           }*/
-        instagram_username_names[member_username] = parse_feeds.strip(members[i].title.toLowerCase()
+        /*instagram_username_names[member_username] = parse_feeds.strip(members[i].title.toLowerCase()
                                                                       .replace(parse_feeds.parse_hangul_first(group).toLowerCase(), "")
-                                                                      .replace(/\( */, "(")
-                                                                      .replace(/ex-/, ""));
+                                                                      .replace(/\( *\/, "(") // replace *\/
+                                                                      .replace(/ex-/, ""));*/
+        instagram_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
       }
 
       var group_members = find_members_by_group(members, group);
