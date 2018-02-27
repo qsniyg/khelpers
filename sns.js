@@ -598,8 +598,21 @@ function update_twitter_main(filename, splitted) {
 
   var users = {};
   var current_user = "";
-  var groupname = parse_feeds.parse_hangul_first(path.basename(filename).split("_")[0]);
+  var group_hangul = path.basename(filename).split("_")[0];
+  var groupname = parse_feeds.parse_hangul_first(group_hangul);
   var grouplower = groupname.toLowerCase();
+
+  var group_alts = [];
+  parse_feeds.members.forEach((member) => {
+    if (!member)
+      return;
+    if (member.alt !== group_hangul)
+      return;
+    member.names.forEach((name) => {
+      group_alts.push(name.roman.toLowerCase());
+    });
+  });
+
   for (var i = 0; i < splitted.length; i++) {
     var userreg = splitted[i].match(/^## *(.*?) *$/);
     if (userreg) {
@@ -713,13 +726,14 @@ function update_twitter_main(filename, splitted) {
 
       var usertext = "";
 
+      user = markdown_to_text(user);
       if (user.match(/\(.*'s/)) {
         // family member
         usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
       } else {
         usertext = groupname.toLowerCase() + " " + user;
-        if (user === groupname.toLowerCase())
-          usertext = groupname.toLowerCase();
+        if (user === groupname.toLowerCase() || group_alts.indexOf(user) >= 0)
+          usertext = user;//groupname.toLowerCase();
       }
 
       text += usertext;
@@ -1328,6 +1342,7 @@ function main() {
           mcontent[content[i].url].push(content[i]);
         }
 
+        var mlinks = {};
         var mentries = {};
         var promises = [];
         var promises_done = 0;
@@ -1341,6 +1356,7 @@ function main() {
           }
 
           mentries[nick] = {};
+          mlinks[nick] = "https://www.instagram.com/" + get_username_from_rssit_url(member_url) + "/";
           var mmember = mcontent[member_url];
           var member_username = get_username_from_rssit_url(mmember[0].url);
           var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, "instagram", member_username));
@@ -1585,7 +1601,7 @@ function main() {
               Array.prototype.push.apply(newarr, mentries[name][key]);
             });
 
-            sorted_entries.push("## " + name.toLowerCase() + "\n\n" + newarr.join("\n*****\n\n"));
+            sorted_entries.push("## [" + name.toLowerCase() + "](" + mlinks[name] + ")\n\n" + newarr.join("\n*****\n\n"));
           });
           var sorted_text = sorted_entries.join("\n*****\n\n");
 

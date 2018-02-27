@@ -25,6 +25,7 @@ var feeds_toml;
 
 var toplevel_feed;
 module.exports.toplevel_feed = toplevel_feed;
+module.exports.members = null;
 
 
 // https://stackoverflow.com/a/10073788
@@ -613,6 +614,7 @@ function parse_feeds_inner() {
           //console.log("");
         }
 
+        module.exports.members = members;
         resolve(members);
       })
       .catch((e) => {
