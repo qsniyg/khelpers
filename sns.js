@@ -592,23 +592,33 @@ function replace_lines(filename, splitted, extra, album) {
 
   console.log(filename + "_mod");
   fs.writeFileSync(filename + "_mod", newtext);
-  spawn_editor(filename + "_mod");
+  //spawn_editor(filename + "_mod");
 }
 
 function update_twitter_main(filename, splitted) {
-  T = new Twit({
-    consumer_key:         parse_feeds.feeds_toml.general.twitter_key,
-    consumer_secret:      parse_feeds.feeds_toml.general.twitter_secret,
-    access_token:         parse_feeds.feeds_toml.general.twitter_access,
-    access_token_secret:  parse_feeds.feeds_toml.general.twitter_access_secret,
-    timeout_ms:           60*1000,  // optional HTTP request timeout to apply to all requests.
-  });
-
   var users = {};
   var current_user = "";
   var group_hangul = path.basename(filename).split("_")[0];
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
   var grouplower = groupname.toLowerCase();
+
+  var namespace = parse_feeds.feeds_toml.general;
+  if (group_hangul in parse_feeds.feeds_toml) {
+    namespace = parse_feeds.feeds_toml[group_hangul];
+  }
+
+  var tkey = namespace.twitter_key;
+  var tsecret = namespace.twitter_secret;
+  var taccess = namespace.twitter_access;
+  var taccess_secret = namespace.twitter_access_secret;
+
+  T = new Twit({
+    consumer_key:         tkey,
+    consumer_secret:      tsecret,
+    access_token:         taccess,
+    access_token_secret:  taccess_secret,
+    timeout_ms:           60*1000,  // optional HTTP request timeout to apply to all requests.
+  });
 
   var group_alts = [];
   parse_feeds.members.forEach((member) => {
@@ -776,7 +786,7 @@ function update_twitter_main(filename, splitted) {
                 i--;
                 }*/
               tweets.push({text:currenttext.substr(0, i) + " …"});
-              currenttext = "@" + parse_feeds.feeds_toml.general.twitter_username + " " + trim_text(currenttext.substr(i));
+              currenttext = "@" + namespace.twitter_username + " " + trim_text(currenttext.substr(i));
               break;
             }
           }
@@ -890,6 +900,7 @@ function do_tweets(tweets) {
         media_ids: mediaids
       }).then(
         (result) => {
+          console.log("Tweet " + (x + 1) + "/" + tweets.length);
           do_tweet(x + 1, result.data.id_str);
         },
         (err) => {
@@ -951,7 +962,12 @@ function update_reddit(filename) {
     }
 
     if (nextlink && splitted[i].startsWith("http")) {
+      if (splitted[i].indexOf("images below as an album") >= 0)
+        continue;
+
       lastlink = splitted[i].replace(/ +-.*/, "");
+      /*console.log(splitted[i]);
+      console.log(splitted[i].replace(/.* +-/, ""));*/
       if (splitted[i].replace(/.* +-/, "").indexOf("title") >= 0)
         titlelink = lastlink;
       if (splitted[i].indexOf("www.instagram.com") >= 0) {
@@ -1012,6 +1028,7 @@ function update_reddit(filename) {
     for (var user in users) {
       userarr.push(user);
     }
+    userarr = userarr.sort(naturalSort);
     prefix = userarr.join(", ");
     if (hasfamily)
       prefix += " + Family";
@@ -1132,13 +1149,21 @@ function update_file_main(filename, splitted) {
     var images = {};
     var videos = {};
     var story = "";
+    var is_title = "";
+
+    if (splitted[i-1].match(/ +- *title/)) {
+      is_title = "title, ";
+    }
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
       story = "story, ";
-    } else if ((splitted[i-1].search(/https?:\/\/[^/.]*cdninstagram\.com\//) >= 0) ||
-               (splitted[i-1].search(/https?:\/\/instagram\..*\.fbcdn\.net\//) >= 0)) {
+    } else if ((splitted[i-1].match(/https?:\/\/[^/.]*cdninstagram\.com\//)) ||
+               (splitted[i-1].match(/https?:\/\/instagram\..*\.fbcdn\.net\//))) {
       story = "new profile ";
     }
+
+    if (story)
+      story = is_title + story;
 
     for (; i < splitted.length; i++) {
       if (trim_text(splitted[i]).length === 0) {
@@ -1173,7 +1198,7 @@ function update_file_main(filename, splitted) {
     //console.log("---");
     //continue;
 
-    ((images, videos, story) => {
+    ((images, videos, story, is_title) => {
       if (images.length === 0 && videos.length === 0) {
         console.log("Need to fetch...");
       } else {
@@ -1252,7 +1277,7 @@ function update_file_main(filename, splitted) {
           x_i++;
         }
       }
-    })(images, videos, story);
+    })(images, videos, story, is_title);
   }
 
   Promise.all(promises).then(() => {
@@ -1380,8 +1405,8 @@ function parse_name_from_title(title, group) {
 }
 
 function main() {
-  if (process.argv.length < 4) {
-    console.log("groupname start_timestamp");
+  if (process.argv.length < 3) {
+    console.log("groupname [start_timestamp] [-?end_timestamp] [re|tw]");
     return;
   }
 
@@ -1397,8 +1422,42 @@ function main() {
     return;
   }
 
+  var basedir = expandHomeDir(parse_feeds.feeds_toml.general.snssavedir);
   var group = process.argv[2];
   var timestamp = process.argv[3];
+  if (!timestamp) {
+    var last_timestamp = 0;
+    var items = fs.readdirSync(basedir);
+    items = items.sort(naturalSort);
+    items.forEach((item) => {
+      if (item.split("_")[0] !== group || item.indexOf(".txt_mod") < 0)
+        return;
+      var curr = parseInt(item.split("_")[2]);
+      if (curr > last_timestamp)
+          last_timestamp = curr;
+    });
+    if (last_timestamp > 0) {
+      timestamp = last_timestamp.toString();
+      //console.log(timestamp);
+      var temp = moment(parse_timestamp(timestamp));
+      temp.add(1, 'd');
+      /*console.log(temp);
+      console.log(temp.date());
+      console.log(temp.month());
+      console.log(temp.year());*/
+      /*console.log(reset_date(temp.toDate()));
+      timestamp = parse_feeds.create_timestamp(reset_date(temp.toDate()));
+      console.log(timestamp);*/
+      timestamp =
+        parse_feeds.pad(temp.year().toString().slice(2), 2) +
+        parse_feeds.pad((temp.month() + 1).toString(), 2) +
+        parse_feeds.pad((temp.date()).toString(), 2);
+    }
+  }
+  if (!timestamp) {
+    console.log("No timestamp");
+    return;
+  }
   var startdate = parse_timestamp(timestamp);
 
   var enddate;
@@ -1754,7 +1813,13 @@ function main() {
                             /*console.log(entry);
                             console.log(mentries);
                             console.log(nick);*/
-                            var node = JSON.parse(body);
+                            try {
+                              var node = JSON.parse(body);
+                            } catch (e) {
+                              console.log("can't parse JSON");
+                              resolve();
+                              return;
+                            }
                             var comments = node.edge_media_to_comment.edges;
                             var importantcomments = {};
 
@@ -1860,4 +1925,4 @@ function main() {
   );
 }
 
-main();
+parse_feeds.read_toml().then(main);

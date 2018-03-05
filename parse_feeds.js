@@ -34,6 +34,7 @@ function pad(n, width, z) {
   n = n + '';
   return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
+module.exports.pad = pad;
 
 function create_timestamp(date) {
   var timestamp_year = pad(date.getFullYear()-2000, 2);
@@ -284,7 +285,8 @@ module.exports.parse_name = parse_name;
 function parse_name_obj(text, obj) {
   return {
     hangul: text,
-    roman: parse_name(text, obj)
+    roman: parse_name(text, obj),
+    roman_first: parse_name(text, obj),
   };
 }
 
@@ -335,6 +337,7 @@ function get_name(text, username) {
 
     if ("nicks" in alt) {
       alt.nicks.forEach((x) => {
+        //ret.has_user_nick = true;
         ret.nicks.push(parse_hangul_obj(x, false, alt));
       });
     }
@@ -432,6 +435,7 @@ function parse_member(obj, options) {
   if (name && (name.names || name.nicks)) {
     member.names = name.names;
     member.nicks = name.nicks;
+    member.has_user_nick = name.has_user_nick;
   }
 
 
@@ -506,9 +510,9 @@ function parse_member(obj, options) {
 
     if (member.family) {
       if (member.nicks && member.nicks[0] && member.has_user_nick)
-        title += member.nicks[0].roman;
+        title += member.nicks[0].roman_first;
       else if (member.names && member.names[0])
-        title += member.names[0].roman;
+        title += member.names[0].roman_first;
       else
         title += member.alt;
 
@@ -526,17 +530,17 @@ function parse_member(obj, options) {
       title += grouptitle;
 
       if (member.nicks && member.nicks[0])
-        title += member.nicks[0].roman;
+        title += member.nicks[0].roman_first;
       else if (member.names && member.names[0])
-        title += member.names[0].roman;
+        title += member.names[0].roman_first;
       else
         title += member.alt;
     }
   } else {
     if (member.nicks && member.nicks[0] && member.has_user_nick)
-      title += member.nicks[0].roman;
+      title += member.nicks[0].roman_first;
     else if (member.names && member.names[0])
-      title += member.names[0].roman;
+      title += member.names[0].roman_first;
     else
       title += member.alt;
   }
