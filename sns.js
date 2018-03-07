@@ -631,11 +631,6 @@ function parse_txt(filename, splitted) {
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
   var grouplower = groupname.toLowerCase();
 
-  var namespace = parse_feeds.feeds_toml.general;
-  if (group_hangul in parse_feeds.feeds_toml) {
-    namespace = parse_feeds.feeds_toml[group_hangul];
-  }
-
   var group_alts = [];
   parse_feeds.members.forEach((member) => {
     if (!member)
@@ -655,10 +650,16 @@ function parse_txt(filename, splitted) {
       continue;
     }
 
-    if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//) &&
-        splitted[i].indexOf("://guid.instagram.com") < 0) {
+    if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo\.com\//) &&
+        !splitted[i].match(/^https?:\/\/[^/.]*cdninstagram\.com\//) &&
+        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//)) {
       continue;
     }
+    /*if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//) &&
+        splitted[i].indexOf("://guid.instagram.com") < 0) {
+      continue;
+    }*/
 
     var url = splitted[i].replace(/ +- +.*/, "");
 
@@ -666,11 +667,22 @@ function parse_txt(filename, splitted) {
     i++;
     var images = {};
     var videos = {};
+    var type = "ig";
     var story = "";
+    var is_title = false;
+
+    if (splitted[i-1].match(/ +- *title/)) {
+      is_title = true;
+    }
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
       url = "";
-      story = " story";
+      story = "story, ";
+      type = "story";
+    } else if ((splitted[i-1].match(/https?:\/\/[^/.]*cdninstagram\.com\//)) ||
+               (splitted[i-1].match(/https?:\/\/instagram\..*\.fbcdn\.net\//))) {
+      story = "new profile ";
+      type = "dp";
     }
 
     for (; i < splitted.length; i++) {
@@ -740,8 +752,10 @@ function parse_txt(filename, splitted) {
 
     users[current_user].push({
       "usertext": usertext,
+      "type": type,
       "url": url,
       "story": story,
+      "is_title": is_title,
       "images": images,
       "videos": videos,
       "okenglish": okenglish,
@@ -749,6 +763,14 @@ function parse_txt(filename, splitted) {
       "engtext": markdown_to_text(engtext)
     });
   }
+
+  return {
+    group_hangul,
+    groupname,
+    grouplower,
+    group_alts,
+    users
+  };
 }
 
 function update_blogger_main(filename, splitted) {
@@ -775,8 +797,34 @@ function update_blogger_main(filename, splitted) {
 }
 
 function update_twitter_main(filename, splitted) {
-  var users = {};
-  var current_user = "";
+  var parsed = parse_txt(filename, splitted);
+  var group_hangul = parsed.group_hangul;
+  var groupname = parsed.groupname;
+  var grouplower = parsed.grouplower;
+  var group_alts = parsed.group_alts;
+  var users = parsed.users;
+
+  var namespace = parse_feeds.feeds_toml.general;
+  if (group_hangul in parse_feeds.feeds_toml) {
+    namespace = parse_feeds.feeds_toml[group_hangul];
+  }
+
+  var tkey = namespace.twitter_key;
+  var tsecret = namespace.twitter_secret;
+  var taccess = namespace.twitter_access;
+  var taccess_secret = namespace.twitter_access_secret;
+
+  T = new Twit({
+    consumer_key:         tkey,
+    consumer_secret:      tsecret,
+    access_token:         taccess,
+    access_token_secret:  taccess_secret,
+    timeout_ms:           60*1000,  // optional HTTP request timeout to apply to all requests.
+  });
+
+  //var users = {};
+  //var current_user = "";
+  /*
   var group_hangul = path.basename(filename).split("_")[0];
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
   var grouplower = groupname.toLowerCase();
@@ -823,7 +871,7 @@ function update_twitter_main(filename, splitted) {
       continue;
     }
 
-    var url = splitted[i].replace(/ +- +.*/, "");
+    var url = splitted[i].replace(/ +- +.*\/, ""); // fix * /
 
     var origi = i;
     i++;
@@ -850,10 +898,10 @@ function update_twitter_main(filename, splitted) {
         /*console.log(story);
         console.log(key);
         console.log(origi);
-        console.log("");*/
+        console.log("");*\/
         /*if (story && key === (origi + 1)) {
           key--;
-        }*/
+        }*\/
         if (file.endsWith(".jpg"))
           images[key] = file;
         else if (file.endsWith(".mp4"))
@@ -868,9 +916,9 @@ function update_twitter_main(filename, splitted) {
     var engtext = undefined;
 
     for (; i < splitted.length; i++) {
-      if (splitted[i].match(/^\*\*\*\*\*/) ||
+      if (splitted[i].match(/^\*\*\*\*\*\/) || // fix * /
           splitted[i].match(/^\*comments/) ||
-          splitted[i].match(/^\*/))
+          splitted[i].match(/^\*\/)) // fix * /
         break;
 
       if (splitted[i][0] === ">") {
@@ -898,7 +946,7 @@ function update_twitter_main(filename, splitted) {
       "origtext": markdown_to_text(origtext),
       "engtext": markdown_to_text(engtext)
     });
-  }
+  }*/
   //console.dir(users);
   //return;
 
@@ -911,8 +959,14 @@ function update_twitter_main(filename, splitted) {
       }
 
       var text = "[ig";
-      if (item.story)
-        text += item.story;
+      if (item.type === "story")
+        text += " story";
+      else if (item.type === "dp")
+        text = "[new ig profile image";
+      else if (item.type !== "ig") {
+        console.log("Unsupported item type: " + item.type);
+        return;
+      }
       if (item.engtext) {
         text += " trans";
       } else if (parse_feeds.feeds_toml.general.all_sns_group.indexOf(grouplower) < 0) {
@@ -994,7 +1048,7 @@ function update_twitter_main(filename, splitted) {
           //freetweets = freetweets.unshift();
           freetweets = freetweets.slice(1);
         } else {
-          obj["text"] = "[continued]";
+          obj.text = "[continued]";
           tweets.push(obj);
         }
       };
