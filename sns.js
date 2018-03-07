@@ -21,6 +21,9 @@ var T;
 const Snoowrap = require('snoowrap');
 var google = require('googleapis');
 var google_oauth = require('./google_oauth');
+var showdown  = require('showdown');
+showdown.setOption("simplifiedAutoLink", true);
+var showdown_converter = new showdown.Converter();
 
 require('dotenv').config();
 
@@ -216,11 +219,18 @@ function markdown_to_text(text) {
     line = line.replace(/\[(.*?)]\([^)]*\)/g, "$1");
     newtext += unescape_text(line) + " ";
   });
+
   var newtext1 = [];
   newtext.split("\n").forEach((line) => {
     newtext1.push(trim_text(line));
   });
+
   return trim_text(newtext1.join("\n"));
+}
+
+function markdown_to_html(text) {
+  return showdown_converter.makeHtml(text)
+    .replace(/<p> *- *<\/p>/g, "<br />");
 }
 
 function escape_text(text) {
@@ -238,7 +248,7 @@ function escape_text(text) {
     if (split[0] === "@") {
       newsplitted.push("[" + split + "](https://www.instagram.com/" + unescape_text(split.substr(1)) + "/)");
     } else {
-      newsplitted.push(split)
+      newsplitted.push(split);
     }
   });
   return newsplitted.join(" ");
@@ -258,7 +268,7 @@ function get_username_from_rssit_url(url) {
 // https://stackoverflow.com/a/28149561
 function date_to_isotime(date) {
   var tzoffset = (new Date()).getTimezoneOffset() * 60000;
-  return (new Date(date - tzoffset)).toISOString().slice(0, -1).replace(/\.[0-9]*$/, "");;
+  return (new Date(date - tzoffset)).toISOString().slice(0, -1).replace(/\.[0-9]*$/, "");
 }
 
 var errors = [];
@@ -627,8 +637,14 @@ function replace_lines(filename, splitted, extra, album) {
 function parse_txt(filename, splitted) {
   var users = {};
   var current_user = "";
-  var group_hangul = path.basename(filename).split("_")[0];
+  var fn_split = path.basename(filename).split("_");
+
+  var group_hangul = fn_split[0];
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
+
+  var start = fn_split[1];
+  var end = fn_split[2].replace(/[^0-9]*/g, "");
+
   var grouplower = groupname.toLowerCase();
 
   var group_alts = [];
@@ -642,6 +658,10 @@ function parse_txt(filename, splitted) {
     });
   });
 
+  var group_members = find_members_by_group(parse_feeds.members, group_hangul);
+
+  var items_count = 0;
+
   for (var i = 0; i < splitted.length; i++) {
     var userreg = splitted[i].match(/^## *(.*?) *$/);
     if (userreg) {
@@ -653,15 +673,30 @@ function parse_txt(filename, splitted) {
     if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//) &&
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo\.com\//) &&
         !splitted[i].match(/^https?:\/\/[^/.]*cdninstagram\.com\//) &&
-        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//)) {
+        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?imgur\.com\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?streamable\.com\//)) {
       continue;
     }
+
+    if (splitted[i].match(/ - images below as an album/))
+      continue;
     /*if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//) &&
         splitted[i].indexOf("://guid.instagram.com") < 0) {
       continue;
     }*/
 
-    var url = splitted[i].replace(/ +- +.*/, "");
+    var org_spli = trim_text(splitted[i]);
+    var url = splitted[i].replace(/([^ ]+) +.*/, "$1");
+    var anyurl = url;
+    var annotation = trim_text(splitted[i].replace(/.* +- +(.*?)/, "$1"));
+    if (annotation === org_spli)
+      annotation = null;
+    else
+      annotation = trim_text(annotation.replace(/\[([0-9]+)\] *$/, ""));
+    var timestamp = trim_text(splitted[i].replace(/.* +\[([0-9]+)\].*/, "$1"));
+    if (timestamp === org_spli)
+      timestamp = null;
 
     var origi = i;
     i++;
@@ -671,16 +706,19 @@ function parse_txt(filename, splitted) {
     var story = "";
     var is_title = false;
 
-    if (splitted[i-1].match(/ +- *title/)) {
+    if (annotation.match(/title/)) {
       is_title = true;
     }
 
-    if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
-      url = "";
+    if (splitted[i-1].indexOf("://guid.instagram.com") >= 0 ||
+        annotation.match(/story/)) {
+      if (splitted[i-1].indexOf("://guid.instagram.com") >= 0)
+        url = "";
       story = "story, ";
       type = "story";
     } else if ((splitted[i-1].match(/https?:\/\/[^/.]*cdninstagram\.com\//)) ||
-               (splitted[i-1].match(/https?:\/\/instagram\..*\.fbcdn\.net\//))) {
+               (splitted[i-1].match(/https?:\/\/instagram\..*\.fbcdn\.net\//)) ||
+               annotation.match(/new profile/)) {
       story = "new profile ";
       type = "dp";
     }
@@ -738,9 +776,17 @@ function parse_txt(filename, splitted) {
       }
     }
 
+    for (; i < splitted.length; i++) {
+      if (splitted[i].match(/^\*\*\*\*\*/) ||
+          splitted[i].match(/^##/))
+        break;
+    }
+
     var usertext = "";
 
     var user = markdown_to_text(current_user);
+    var userurl = current_user.replace(/.*\((http[^)]*)\).*/, "$1");
+    var username = userurl.replace(/.*\.com\/([^/]*).*?$/, "$1");
     if (user.match(/\(.*'s/)) {
       // family member
       usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
@@ -750,18 +796,38 @@ function parse_txt(filename, splitted) {
         usertext = user;//groupname.toLowerCase();
     }
 
+    var member = null;
+    for (var x = 0; x < group_members.length; x++) {
+      var newusername = get_username_from_rssit_url(group_members[x].obj.url);
+      if (username.toLowerCase() === newusername.toLowerCase()) {
+        member = group_members[x];
+        break;
+      }
+    }
+
     users[current_user].push({
+      "rawusertext": user,
       "usertext": usertext,
+      "userurl": userurl,
+      "username": username,
+      "member": member,
       "type": type,
+      "annotation": annotation,
+      "timestamp": timestamp,
       "url": url,
+      "anyurl": anyurl,
       "story": story,
       "is_title": is_title,
+      "startline": origi,
+      "endline": i,
+      "contents": splitted.slice(origi, i),
       "images": images,
       "videos": videos,
       "okenglish": okenglish,
       "origtext": markdown_to_text(origtext),
       "engtext": markdown_to_text(engtext)
     });
+    items_count++;
   }
 
   return {
@@ -769,31 +835,199 @@ function parse_txt(filename, splitted) {
     groupname,
     grouplower,
     group_alts,
-    users
+    start,
+    end,
+    users,
+    items_count
   };
 }
 
+function maximg(src) {
+  if (src.indexOf("//") === 0)
+    src = "https:" + src;
+
+  var protocol_split = src.split("://");
+  var protocol = protocol_split[0];
+  var splitted = protocol_split[1].split("/");
+  var domain = splitted[0];
+
+  if (domain.indexOf("cdninstagram.com") >= 0 ||
+      domain.match(/^instagram\..*\.fbcdn\.net/)) {
+    var urlstart = "https://" + domain + "/";
+    var has_t = false;
+    for (var i = 0; i < splitted.length; i++) {
+      splitted[i] = splitted[i].replace(/\?.*$/, "");
+      if (splitted[i].match(/^t[0-9]+\.[0-9]+-[0-9]+$/)) {
+        urlstart += splitted[i] + "/";
+        has_t = true;
+      } else if (splitted[i].match(/^[0-9_]*_[a-z]+\.[a-z0-9]+$/)) {
+        if (!has_t) {
+          urlstart += "/";
+        }
+
+        urlstart += splitted[i];
+      }
+    }
+    return urlstart;
+  }
+
+  if (domain === "images.streamable.com") {
+    return src.replace(/\?[^/]*$/, "");
+  }
+}
+
 function update_blogger_main(filename, splitted) {
-  var users = parse_txt(filename, splitted);
+  var parsed = parse_txt(filename, splitted);
 
-  return;
-  google_oauth("blogger", null, function(auth) {
-    var blogger = google.blogger({
-      version: 'v3',
-      auth
+  var posts = [];
+
+  var oneday = false;
+  var day = parsed.start;
+  if (parsed.start === parsed.end) {
+    oneday = true;
+  }
+
+  var current_count = 0;
+
+  for (var user_key in parsed.users) {
+    var user = parsed.users[user_key];
+    user.forEach((item) => {
+      //console.dir(item);
+      //console.dir(item.member.names);
+      //console.dir(item.member.nicks);
+      var ourday = day;
+      if (item.timestamp)
+        ourday = item.timestamp;
+
+      if (item.type !== "ig" &&
+          item.type !== "story") {
+        current_count++;
+        return;
+      }
+
+      var updatetext = "Update";
+      if (item.type === "story")
+        updatetext = "Story";
+
+      var title = item.member.title + " Instagram " + updatetext + " [" + ourday + "]";
+
+      var labels = [];
+      labels.push("SNS");
+      labels.push("Instagram");
+      labels.push("Translation");
+      labels.push(item.member.group);
+      labels.push(parse_feeds.parse_hangul_first(item.member.group));
+      labels.push(item.member.names[0].hangul);
+      labels.push(item.member.names[0].roman_first);
+      labels.push(item.member.nicks[0].hangul);
+      labels.push(item.member.nicks[0].roman_first);
+
+      var thumbnail = null;
+
+      var contents_md = trim_text(item.contents.slice(1).join("\n"));
+      var firstline = item.url;
+
+      var promise = new Promise((resolve, reject) => {
+        resolve();
+      });
+
+      if (item.url.match(/imgur\.com.*\.jpg/)) {
+        firstline = "<p><img src='" + item.url + "' /></p>";
+      } else if (item.url.match(/streamable\.com/)) {
+        promise = new Promise((resolve, reject) => {
+          var queryurl = 'https://api.streamable.com/oembed?url=' + item.url;
+          request(queryurl, (error, response, body) => {
+            if (error) {
+              console.dir(error);
+              return;
+            }
+
+            var data = JSON.parse(body);
+            firstline = data.html;
+            thumbnail = maximg(data.thumbnail_url);
+            resolve();
+          });
+        });
+      } else if (item.url.match(/instagram\.com\/p\//)) {
+        promise = new Promise((resolve, reject) => {
+          var queryurl = 'https://api.instagram.com/oembed/?url=https://instagr.am/p/' + item.url.replace(/.*instagram\.com\/p\/([^/]*).*?$/, "$1");
+          request(queryurl, (error, response, body) => {
+            if (error) {
+              console.dir(error);
+              return;
+            }
+
+            var data = JSON.parse(body);
+            firstline = data.html;
+            thumbnail = maximg(data.thumbnail_url);
+            resolve();
+          });
+        });
+      }
+
+      promise.then(() => {
+        var contents = markdown_to_html(contents_md);
+        var viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.member.username + "/' target='_blank'>" + item.member.username + "</a> on instagram)</em></p><br />\n";
+        contents = firstline + viatext + contents;
+
+        console.log(title);
+        console.log("-----");
+        console.log(contents);
+        console.log("-----");
+        console.log(labels);
+        console.log("-----");
+        console.log("=====");
+
+        var post = {
+          title: title,
+          content: contents,
+          labels: labels
+        };
+        if (thumbnail) {
+          post.content = "<img src='" + thumbnail + "' style='display:none' />" + post.content;
+        }
+        posts.push(post);
+        current_count++;
+
+        if (current_count >= parsed.items_count) {
+          do_blogger_posts(posts);
+        }
+      });
     });
+  }
+}
 
+var blogger = null;
+function do_blogger_posts(posts) {
+  if (posts.length === 0) {
+    console.log("Done");
+    return;
+  }
+
+  if (!blogger) {
+    google_oauth("blogger", null, function(auth) {
+      blogger = google.blogger({
+        version: 'v3',
+        auth
+      });
+      do_blogger_posts(posts);
+    });
+  } else {
+    console.dir(posts[0]);
     blogger.posts.insert({
       blogId: parse_feeds.feeds_toml.general.blogger_blogid,
-      resource: {
-        title: "Test",
-        content: "test"
-      }
+      resource: posts[0]
     }, function (err, resp) {
-      console.dir(err);
-      console.dir(resp);
+      if (err) {
+        console.log("ERROR");
+        console.dir(err);
+      }
+      if (resp) {
+        console.dir(resp);
+        do_blogger_posts(posts.slice(1));
+      }
     });
-  });
+  }
 }
 
 function update_twitter_main(filename, splitted) {
@@ -1081,7 +1315,7 @@ function do_tweets(tweets) {
   var do_tweet = function(x, tweetid) {
     if (tweets[x] === undefined) {
       if ((x + 1) < tweets.length) {
-        console.log("Unable to post every tweet (" + (x + 1) + ")");
+        console.log("Unable to post every tweet (" + (x + 1) + "/" + tweets.length + ")");
       } else {
         console.log("Finished");
       }
@@ -1119,7 +1353,7 @@ function do_tweets(tweets) {
 
     Promise.all(media_promises).then(() => {
       var mediaids = [];
-      if (Object.keys(medias).length == 0)
+      if (Object.keys(medias).length === 0)
         mediaids = null;
       else {
         var keys_sorted = Object.keys(medias).sort();
@@ -1383,9 +1617,14 @@ function update_file_main(filename, splitted) {
     var videos = {};
     var story = "";
     var is_title = "";
+    var timestamp = "";
 
     if (splitted[i-1].match(/ +- *title/)) {
       is_title = "title, ";
+    }
+
+    if (splitted[i-1].match(/ \[[0-9]+\] *$/)) {
+      timestamp = " [" + splitted[i-1].replace(/.* \[([0-9]+)\] *$/, "$1") + "]";
     }
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
@@ -1397,6 +1636,8 @@ function update_file_main(filename, splitted) {
 
     if (story)
       story = is_title + story;
+    else
+      timestamp = "";
 
     for (; i < splitted.length; i++) {
       if (trim_text(splitted[i]).length === 0) {
@@ -1431,7 +1672,7 @@ function update_file_main(filename, splitted) {
     //console.log("---");
     //continue;
 
-    ((images, videos, story, is_title) => {
+    ((images, videos, story, is_title, timestamp) => {
       if (images.length === 0 && videos.length === 0) {
         console.log("Need to fetch...");
       } else {
@@ -1451,7 +1692,7 @@ function update_file_main(filename, splitted) {
             //console.dir(json);
             console.log("Single image");
             console.log(images[key] + " - " + json.data.link);
-            extra[key] = json.data.link + " - " + story + "image";
+            extra[key] = json.data.link + " - " + story + "image" + timestamp;
             //console.dir(extra);
           }, (err) => {
             console.log("Error uploading image: " + images[key]);
@@ -1477,7 +1718,7 @@ function update_file_main(filename, splitted) {
             console.log(albumurl);
             console.dir(images);
             console.log("---");
-            extra[key] = "https://imgur.com/a/" + json.data.id + " - " + story + "images";
+            extra[key] = "https://imgur.com/a/" + json.data.id + " - " + story + "images" + timestamp;
           }, (err) => {
             console.log("Error uploading album");
             console.dir(images);
@@ -1492,7 +1733,7 @@ function update_file_main(filename, splitted) {
               upload_video(videos[x]).then(
                 (data) => {
                   //console.dir(data);
-                  var text = "https://streamable.com/" + data.shortcode + " - " + story;
+                  var text = "https://streamable.com/" + data.shortcode + " - " + story + timestamp;
                   if (videos.length > 1)
                     text += "video " + (x_i + 1);
                   else
@@ -1512,7 +1753,7 @@ function update_file_main(filename, splitted) {
           x_i++;
         }
       }
-    })(images, videos, story, is_title);
+    })(images, videos, story, is_title, timestamp);
   }
 
   Promise.all(promises).then(() => {
@@ -1645,6 +1886,12 @@ function parse_name_from_title(title, group) {
                            .replace(/Ex-/, ""));
 }
 
+function do_timestamp(ts) {
+  return parse_feeds.pad(ts.year().toString().slice(2), 2) +
+    parse_feeds.pad((ts.month() + 1).toString(), 2) +
+    parse_feeds.pad((ts.date()).toString(), 2);;
+}
+
 function main() {
   if (process.argv.length < 3) {
     console.log("groupname [start_timestamp] [-?end_timestamp] [re|tw]");
@@ -1689,10 +1936,11 @@ function main() {
       /*console.log(reset_date(temp.toDate()));
       timestamp = parse_feeds.create_timestamp(reset_date(temp.toDate()));
       console.log(timestamp);*/
-      timestamp =
+      /*timestamp =
         parse_feeds.pad(temp.year().toString().slice(2), 2) +
         parse_feeds.pad((temp.month() + 1).toString(), 2) +
-        parse_feeds.pad((temp.date()).toString(), 2);
+        parse_feeds.pad((temp.date()).toString(), 2);*/
+      timestamp = do_timestamp(temp);
     }
   }
   if (!timestamp) {
@@ -1750,6 +1998,10 @@ function main() {
 
   console.log("From " + startdate + " to " + enddate);
 
+  var oneday = false;
+  if (timestamp === end_timestamp)
+    oneday = true;
+
   var basename = group + "_" + timestamp + "_" + end_timestamp + ".txt";
 
   parse_feeds.parse_feeds(true).then(
@@ -1773,11 +2025,11 @@ function main() {
         update_reddit(filename + "_mod");
         return;
       } else if (blogger) {
-        if (!fs.existsSync(filename)) {
-          console.log(filename + " doesn't exist");
+        if (!fs.existsSync(filename + "_mod")) {
+          console.log(filename + "_mod doesn't exist");
         }
         parse_feeds.db.close();
-        update_blogger(filename);
+        update_blogger(filename + "_mod");
         return;
       }
 
@@ -1964,13 +2216,18 @@ function main() {
 
             var entrytext = entry.url;
             if (entry.story) {
-              entrytext += " - story\n";
+              entrytext += " - story";
             } else if (entry.dp) {
-              entrytext += " - new profile photo\n";
-            } else {
-              entrytext += "\n";
+              entrytext += " - new profile photo";
             }
 
+            if (!oneday) {
+              entrytext += " [" + do_timestamp(moment(entry.created)) + "]";
+            }
+
+            entrytext += "\n";
+
+            //entrytext += "*posted at " + moment(entry.created).format("YYYY-MM-DD HH:mm:ss") + "*\n\n";
             //entrytext += get_username_from_rssit_url(mmember[x].url) + ":" + mmember[x].created_at + "\n";
 
             var igimages = [];
