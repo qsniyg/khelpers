@@ -345,8 +345,8 @@ function get_name(text, username) {
 
   ret.comment = strip(text.replace(/.*# *(.*)$/, "$1"));
   text = strip(text.replace(/#.*$/, ""));
-  if (text.indexOf(" ") >= 0) {
-    var splitted = text.split(" ");
+  if (text.indexOf(" (") >= 0) {
+    var splitted = text.split(" (");
     var ssplitted = splitted[0].split("/");
     ssplitted.forEach((x) => {
       ret.names.push(parse_name_obj(x, alt));
@@ -440,7 +440,7 @@ function parse_member(obj, options) {
 
 
   if (options) {
-    if (options.group) {
+    if (options.group && options.group !== "작음") {
       member.group = options.group;
     }
 

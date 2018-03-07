@@ -15,6 +15,7 @@
     "moment-timezone": "^0.5.14",
     "monk": "^6.0.5",
     "node-notifier": "^5.1.2",
+    "picasa": "^1.0.7",
     "readline-sync": "^1.4.7",
     "request": "^2.83.0",
     "request-debug": "^0.2.0",

@@ -6,20 +6,59 @@ var fs = require('fs');
 var readline = require('readline');
 var googleAuth = require('google-auth-library');
 var path = require('path');
+const Picasa = require('picasa');
+const picasa = new Picasa();
 
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
     process.env.USERPROFILE) + '/.credentials/';
 var TOKEN_PATH = TOKEN_DIR + 'khelpers.json';
 
-module.exports = function(scopes, callback) {
+var scopes = [
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/blogger'
+];
+
+module.exports = function(namespace, scopes_, callback) {
   // Load client secrets from a local file.
   fs.readFile(path.resolve(__dirname, 'client_secret.json'), function processClientSecrets(err, content) {
     if (err) {
       console.log('Error loading client secret file: ' + err);
       return;
     }
+    TOKEN_PATH = TOKEN_DIR + "khelpers_" + namespace + ".json";
     // Authorize a client with the loaded credentials, then call the YouTube API.
     authorize(scopes, JSON.parse(content), callback);
+  });
+};
+
+function authorize_picasa(credentials, callback) {
+  fs.readFile(TOKEN_PATH, function(err, token) {
+    if (err) {
+      //getNewToken(scopes, oauth2Client, callback);
+      var config = {
+        clientId: credentials.installed.client_id,
+        redirectURI: credentials.installed.token_uri,
+        clientSecret: credentials.installed.client_secret
+      };
+
+      var authURL = picasa.getAuthURL(config);
+      console.log(authURL);
+
+      var rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      rl.question('Enter the code from that page here: ', function(code) {
+        rl.close();
+        picasa.getTokens(config, code).then(tokens => {
+          storeToken(tokens);
+          callback(tokens.accessToken);
+        });
+      });
+    } else {
+      callback(JSON.parse(token).accessToken);
+    }
   });
 }
 

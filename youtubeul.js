@@ -10,7 +10,8 @@ var DMClient = require('dailymotion-sdk').client;
 
 var scopes = [
   'https://www.googleapis.com/auth/youtube.upload',
-  'https://www.googleapis.com/auth/youtube'
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/blogger'
 ];
 
 // https://stackoverflow.com/a/10073788
@@ -22,7 +23,7 @@ function pad(n, width, z) {
 
 function get_videos() {
   return new Promise((resolve, reject) => {
-    google_oauth(scopes, function(auth) {
+    google_oauth("youtube", scopes, function(auth) {
       var youtube = google.youtube({
         version: 'v3',
         auth
@@ -121,7 +122,7 @@ function upload_video_yt(options) {
     return;
   }
 
-  google_oauth(scopes, function(auth) {
+  google_oauth("youtube", scopes, function(auth) {
     // https://github.com/google/google-api-nodejs-client/blob/master/samples/youtube/upload.js
     var youtube = google.youtube({
       version: 'v3',

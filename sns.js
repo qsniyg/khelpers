@@ -19,6 +19,8 @@ var twitter = require('twitter-text');
 var Twit = require('twit');
 var T;
 const Snoowrap = require('snoowrap');
+var google = require('googleapis');
+var google_oauth = require('./google_oauth');
 
 require('dotenv').config();
 
@@ -433,14 +435,50 @@ function upload_video(video) {
   });
 }
 
-var uploaded_images = [];
+var uploaded_images = {};
 var images_times_ran = 0;
+
+function create_imgur_album(deletehashes) {
+  return new Promise((resolve, reject) => {
+    var images = [];
+    Object.keys(deletehashes).sort().forEach((key) => {
+      images.push(deletehashes[key]);
+    });
+
+    imgur._getAuthorizationHeader().then((authHeader) => {
+      var options  = {
+        uri: 'https://api.imgur.com/3/album',
+        method: 'POST',
+        encoding: 'utf8',
+        json: true,
+        headers: {
+          Authorization: authHeader,
+        },
+        body: {
+          "deletehashes": images.join(",")
+        }
+      };
+
+      console.dir(options);
+
+      var r = request(options, (err, res, body) => {
+        if (err) {
+          reject(err);
+        } else if (body && !body.success) {
+          reject({status: body.status, message: body.data ? body.data.error : 'No body data response'});
+        } else {
+          resolve(body);
+        }
+      });
+    });
+  });
+}
 
 function upload_images(images) {
   images_times_ran++;
   if (false) {
     var chance = new require('chance')();
-    if (images.length === 1) {
+    if (Object.keys(images).length === 1) {
       return new Promise((resolve, reject) => {
         resolve({data:{link:"https://fakeimgur.com/" + chance.string(),deletehash:chance.string()}});
       });
@@ -458,44 +496,28 @@ function upload_images(images) {
 
     var our_album = null;
     var promise = null;
-    if (images.length > 1) {
-      if (images !== uploaded_images)
-        promise = imgur.createAlbum();
-      else {
+    var images_length = Object.keys(images).length;
+    if (images_length > 1) {
+      if (images !== uploaded_images) {
+        //promise = imgur.createAlbum();
+        promise = new Promise((resolve, reject) => {
+          resolve();
+        });
+      } else {
         // 2, including this time
-        if (uploaded_images.length === 0 || images_times_ran <= 2) {
+        if (Object.keys(uploaded_images).length === 0 || images_times_ran <= 2) {
           resolve(null);
           return null;
         }
 
-        //new Promise((resolve, reject) => {
-          imgur._getAuthorizationHeader().then((authHeader) => {
-            var options  = {
-              uri: 'https://api.imgur.com/3/album',
-              method: 'POST',
-              encoding: 'utf8',
-              json: true,
-              headers: {
-                Authorization: authHeader,
-              },
-              body: {
-                "deletehashes": images.join(",")
-              }
-            };
-
-            console.dir(options);
-
-            var r = request(options, (err, res, body) => {
-              if (err) {
-                reject(err);
-              } else if (body && !body.success) {
-                reject({status: body.status, message: body.data ? body.data.error : 'No body data response'});
-              } else {
-                resolve(body);
-              }
-            });
-          });
-      //});
+        create_imgur_album(images).then(
+          (data) => {
+            resolve(data);
+          },
+          (err) => {
+            reject(err);
+          }
+        );
         return;
       }
     } else {
@@ -507,34 +529,40 @@ function upload_images(images) {
     promise.then(
       (album) => {
         our_album = album;
-        images.forEach((image) => {
+        var current_images = {};
+        for (var key in images) {
+          var image = images[key];
           var readStream = fs.createReadStream(image);
           readStream.on('error', reject);
           var params = {};
           if (album)
             params = {album: album.data.deletehash};
 
-          promises.push(new Promise((resolve, reject) => {
+          (function(key) {
+            promises.push(new Promise((resolve, reject) => {
               imgur._imgurRequest('upload', readStream, params).then(
                 (data) => {
                   console.log(data.data.deletehash);
-                  uploaded_images.push(data.data.deletehash);
+                  uploaded_images[key] = data.data.deletehash;
+                  current_images[key] = data.data.deletehash;
                   resolve(data);
                 },
                 (err) => {
                   reject(err);
                 });
-          }));
-        });
+            }));
+          })(key);
+        }
 
         var newpromise = null;
-        if (images.length === 1) {
-          newpromise =  promises[0];
+        if (images_length === 1) {
+          newpromise = promises[0];
         } else {
           newpromise = new Promise((resolve, reject) => {
             Promise.all(promises).then(
               () => {
-                resolve(our_album);
+                //resolve(our_album);
+                return create_imgur_album(current_images);
               },
               (err) => {
                 reject(err);
@@ -551,6 +579,7 @@ function upload_images(images) {
             reject(err);
           }
         );
+        //return newpromise;
       },
       (err) => {
         reject(err);
@@ -593,6 +622,156 @@ function replace_lines(filename, splitted, extra, album) {
   console.log(filename + "_mod");
   fs.writeFileSync(filename + "_mod", newtext);
   //spawn_editor(filename + "_mod");
+}
+
+function parse_txt(filename, splitted) {
+  var users = {};
+  var current_user = "";
+  var group_hangul = path.basename(filename).split("_")[0];
+  var groupname = parse_feeds.parse_hangul_first(group_hangul);
+  var grouplower = groupname.toLowerCase();
+
+  var namespace = parse_feeds.feeds_toml.general;
+  if (group_hangul in parse_feeds.feeds_toml) {
+    namespace = parse_feeds.feeds_toml[group_hangul];
+  }
+
+  var group_alts = [];
+  parse_feeds.members.forEach((member) => {
+    if (!member)
+      return;
+    if (member.alt !== group_hangul)
+      return;
+    member.names.forEach((name) => {
+      group_alts.push(name.roman.toLowerCase());
+    });
+  });
+
+  for (var i = 0; i < splitted.length; i++) {
+    var userreg = splitted[i].match(/^## *(.*?) *$/);
+    if (userreg) {
+      current_user = userreg[1];
+      users[current_user] = [];
+      continue;
+    }
+
+    if (!splitted[i].match(/^https?:\/\/www\.instagram\.com\//) &&
+        splitted[i].indexOf("://guid.instagram.com") < 0) {
+      continue;
+    }
+
+    var url = splitted[i].replace(/ +- +.*/, "");
+
+    var origi = i;
+    i++;
+    var images = {};
+    var videos = {};
+    var story = "";
+
+    if (splitted[i-1].indexOf("://guid.instagram.com") >= 0) {
+      url = "";
+      story = " story";
+    }
+
+    for (; i < splitted.length; i++) {
+      if (trim_text(splitted[i]).length === 0) {
+        break;
+      }
+
+      var file = expandHomeDir(splitted[i]);
+      if (!fs.existsSync(file)) {
+        console.error(file + " does not exist.");
+        continue;
+      } else {
+        var key = i;
+        /*console.log(story);
+        console.log(key);
+        console.log(origi);
+        console.log("");*/
+        /*if (story && key === (origi + 1)) {
+          key--;
+        }*/
+        if (file.endsWith(".jpg"))
+          images[key] = file;
+        else if (file.endsWith(".mp4"))
+          videos[key] = file;
+        else
+          console.error("Unknown extension for " + file);
+      }
+    }
+
+    var origtext = "";
+    var okenglish = true;
+    var engtext = undefined;
+
+    for (; i < splitted.length; i++) {
+      if (splitted[i].match(/^\*\*\*\*\*/) ||
+          splitted[i].match(/^\*comments/) ||
+          splitted[i].match(/^\*/))
+        break;
+
+      if (splitted[i][0] === ">") {
+        if (engtext === undefined) {
+          origtext += splitted[i] + "\n";
+        } else {
+          engtext += splitted[i] + "\n";
+        }
+      } else if (splitted[i].match(/^english:/)) {
+        if (splitted[i].match(/^english: *$/)) {
+          okenglish = true;
+        } else {
+          okenglish = false;
+        }
+        engtext = "";
+      }
+    }
+
+    var usertext = "";
+
+    var user = markdown_to_text(current_user);
+    if (user.match(/\(.*'s/)) {
+      // family member
+      usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
+    } else {
+      usertext = groupname.toLowerCase() + " " + user;
+      if (current_user === groupname.toLowerCase() || group_alts.indexOf(user) >= 0)
+        usertext = user;//groupname.toLowerCase();
+    }
+
+    users[current_user].push({
+      "usertext": usertext,
+      "url": url,
+      "story": story,
+      "images": images,
+      "videos": videos,
+      "okenglish": okenglish,
+      "origtext": markdown_to_text(origtext),
+      "engtext": markdown_to_text(engtext)
+    });
+  }
+}
+
+function update_blogger_main(filename, splitted) {
+  var users = parse_txt(filename, splitted);
+
+  return;
+  google_oauth("blogger", null, function(auth) {
+    var blogger = google.blogger({
+      version: 'v3',
+      auth
+    });
+
+    blogger.posts.insert({
+      blogId: parse_feeds.feeds_toml.general.blogger_blogid,
+      resource: {
+        title: "Test",
+        content: "test"
+      }
+    }, function (err, resp) {
+      console.dir(err);
+      console.dir(resp);
+    });
+  });
 }
 
 function update_twitter_main(filename, splitted) {
@@ -1211,7 +1390,9 @@ function update_file_main(filename, splitted) {
 
           promises.push(do_promise(() => {
             //return new Promise(imgur.uploadFile(images[key]);
-            return upload_images([images[key]]);
+            var obj = {};
+            obj[key] = images[key];
+            return upload_images(obj);
           }, (json) => {
             //console.dir(json);
             console.log("Single image");
@@ -1231,7 +1412,7 @@ function update_file_main(filename, splitted) {
           promises.push(do_promise(() => {
             var newimages = [];
             for (var image in images) {
-              newimages.push(images[image]);
+              newimages[image] = images[image];
             }
 
             return upload_images(newimages);//imgur.uploadAlbum(newimages, "File");
@@ -1333,6 +1514,12 @@ function update_twitter(filename) {
   var contents = fs.readFileSync(filename).toString('utf8');
   var splitted = contents.split("\n");
   return update_twitter_main(filename, splitted);
+}
+
+function update_blogger(filename) {
+  var contents = fs.readFileSync(filename).toString('utf8');
+  var splitted = contents.split("\n");
+  return update_blogger_main(filename, splitted);
 }
 
 function update_file(filename) {
@@ -1465,6 +1652,7 @@ function main() {
   var create = true;
   var tw = false;
   var reddit = false;
+  var blogger = false;
   if (process.argv.length >= 5) {
     var enddate_timestamp = process.argv[4];
     if (enddate_timestamp[0] === "-") {
@@ -1481,8 +1669,11 @@ function main() {
       } else if (process.argv[5] === "re") {
         console.log("Reddit");
         reddit = true;
+      } else if (process.argv[5] === "bl") {
+        console.log("Blogger");
+        blogger = true;
       } else {
-        console.log("Not twitter/reddit?");
+        console.log("Not twitter/reddit/blogger?");
       }
     }
     //create = false;
@@ -1526,6 +1717,13 @@ function main() {
         }
         parse_feeds.db.close();
         update_reddit(filename + "_mod");
+        return;
+      } else if (blogger) {
+        if (!fs.existsSync(filename)) {
+          console.log(filename + " doesn't exist");
+        }
+        parse_feeds.db.close();
+        update_blogger(filename);
         return;
       }
 
