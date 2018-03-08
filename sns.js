@@ -133,7 +133,8 @@ function find_members_by_group(members, group) {
       continue;
 
     if (member.alt !== group &&
-        member.group !== group) {
+        member.group !== group &&
+        (!member.nicks || !member.nicks[0] || member.nicks[0].hangul !== group || member.group)) {
       continue;
     }
 
@@ -937,10 +938,14 @@ function update_blogger_main(filename, splitted) {
       labels.push("Instagram");
       if (item.engtext)
         labels.push("Translation");
-      labels.push(item.member.group);
-      labels.push(parse_feeds.parse_hangul_first(item.member.group));
-      labels.push(item.member.names[0].hangul);
-      labels.push(item.member.names[0].roman_first);
+      if (item.member.group) {
+        labels.push(item.member.group);
+        labels.push(parse_feeds.parse_hangul_first(item.member.group));
+      }
+      if (item.member.names[0]) {
+        labels.push(item.member.names[0].hangul);
+        labels.push(item.member.names[0].roman_first);
+      }
       labels.push(item.member.nicks[0].hangul);
       labels.push(item.member.nicks[0].roman_first);
 
@@ -1479,6 +1484,7 @@ function update_reddit(filename) {
   var usernames = {};
   var hasfamily = false;
   var onlyone = true;
+  var personcount = 0;
   var instagram_count = 0;
   var lastlink = null;
   var lastinstagram = null;
@@ -1496,6 +1502,10 @@ function update_reddit(filename) {
       onlyone = false;
       nextlink = true;
       continue;
+    }
+
+    if (splitted[i].startsWith("##")) {
+      personcount++;
     }
 
     if (nextlink && splitted[i].startsWith("http")) {
@@ -1528,7 +1538,17 @@ function update_reddit(filename) {
   }
 
   if (!onlyone) {
-    newsplitted = splitted;
+    if (personcount > 1)
+      newsplitted = splitted;
+    else {
+      newsplitted = splitted;
+      for (var i = 0; i < newsplitted.length; i++) {
+        if (parse_feeds.strip(newsplitted[i]).startsWith("##")) {
+          newsplitted[i] = "*****";
+          break;
+        }
+      }
+    }
   } else {
     console.log("Only one");
     var i;
@@ -1951,6 +1971,10 @@ function update_file(filename) {
 }
 
 function parse_name_from_title(title, group) {
+  var base = parse_feeds.strip(title);
+  if (base === parse_feeds.strip(parse_feeds.parse_hangul_first(group)))
+    return base;
+
   return parse_feeds.strip(title
                            .replace(parse_feeds.parse_hangul_first(group), "")
                            .replace(/\( */, "(")
@@ -2170,6 +2194,8 @@ function main() {
         urls.push(group_members[i].obj.url);
       }
 
+      var starttime = 9007199254740991;
+      var endtime = 0;
       parse_feeds.db_content.find({
         url: {
           $in: urls
@@ -2192,6 +2218,11 @@ function main() {
         //console.dir(content);
         parse_feeds.db.close();
 
+        if (content.length === 0) {
+          console.log("No content");
+          return;
+        }
+
         var mcontent = {};
         for (var i = 0; i < content.length; i++) {
           if ((content[i].created_at < startdate.getTime() ||
@@ -2204,6 +2235,42 @@ function main() {
             mcontent[content[i].url] = [];
 
           mcontent[content[i].url].push(content[i]);
+
+          var created = content[i].created_at;
+          if (content[i].title.indexOf("[DP] ") >= 0) {
+            created = content[i].added_at;
+          }
+
+          if (created < starttime) {
+            starttime = created;
+          }
+
+          if (created > endtime) {
+            endtime = created;
+          }
+        }
+
+        var new_timestamp = do_timestamp(moment(starttime));
+        var new_end_timestamp = do_timestamp(moment(endtime));
+
+        if (new_timestamp !== timestamp ||
+            new_end_timestamp !== end_timestamp) {
+          timestamp = new_timestamp;
+          end_timestamp = new_end_timestamp;
+
+          oneday = false;
+          if (timestamp === end_timestamp)
+            oneday = true;
+
+          basename = group + "_" + timestamp + "_" + end_timestamp + ".txt";
+          filename = path.join(basedir, basename);
+          console.log(filename);
+
+          if (fs.existsSync(filename)) {
+            if (!readlineSync.keyInYNStrict("Do you wish to replace " + filename + "?")) {
+              return;
+            }
+          }
         }
 
         var mlinks = {};
