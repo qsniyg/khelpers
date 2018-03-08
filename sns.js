@@ -330,6 +330,14 @@ function upload_video_old(video) {
 
 var ranalready = false;
 function upload_video(video) {
+  if (false) {
+    var chance = new require('chance')();
+    return new Promise((resolve, reject) => {
+      //resolve({video_link:"https://fakestreamable.com/" + chance.string()});
+      resolve({shortcode: chance.string()});
+    });
+  }
+
   /*if (ranalready)
     return;*/
   ranalready = true;
@@ -572,7 +580,14 @@ function upload_images(images) {
             Promise.all(promises).then(
               () => {
                 //resolve(our_album);
-                return create_imgur_album(current_images);
+                create_imgur_album(current_images).then(
+                  (data) => {
+                    resolve(data);
+                  },
+                  (err) => {
+                    reject(err);
+                  }
+                );
               },
               (err) => {
                 reject(err);
@@ -705,22 +720,27 @@ function parse_txt(filename, splitted) {
     var type = "ig";
     var story = "";
     var is_title = false;
+    var deleted = false;
 
-    if (annotation.match(/title/)) {
+    if (annotation && annotation.match(/title/)) {
       is_title = true;
     }
 
     if (splitted[i-1].indexOf("://guid.instagram.com") >= 0 ||
-        annotation.match(/story/)) {
+        (annotation && annotation.match(/story/))) {
       if (splitted[i-1].indexOf("://guid.instagram.com") >= 0)
         url = "";
       story = "story, ";
       type = "story";
     } else if ((splitted[i-1].match(/https?:\/\/[^/.]*cdninstagram\.com\//)) ||
                (splitted[i-1].match(/https?:\/\/instagram\..*\.fbcdn\.net\//)) ||
-               annotation.match(/new profile/)) {
+               (annotation && annotation.match(/new profile/))) {
       story = "new profile ";
       type = "dp";
+    }
+
+    if (annotation && annotation.match(/deleted/)) {
+      deleted = true;
     }
 
     for (; i < splitted.length; i++) {
@@ -814,6 +834,7 @@ function parse_txt(filename, splitted) {
       "type": type,
       "annotation": annotation,
       "timestamp": timestamp,
+      "deleted": deleted,
       "url": url,
       "anyurl": anyurl,
       "story": story,
@@ -914,7 +935,8 @@ function update_blogger_main(filename, splitted) {
       var labels = [];
       labels.push("SNS");
       labels.push("Instagram");
-      labels.push("Translation");
+      if (item.engtext)
+        labels.push("Translation");
       labels.push(item.member.group);
       labels.push(parse_feeds.parse_hangul_first(item.member.group));
       labels.push(item.member.names[0].hangul);
@@ -931,44 +953,92 @@ function update_blogger_main(filename, splitted) {
         resolve();
       });
 
-      if (item.url.match(/imgur\.com.*\.jpg/)) {
-        firstline = "<p><img src='" + item.url + "' /></p>";
-      } else if (item.url.match(/streamable\.com/)) {
-        promise = new Promise((resolve, reject) => {
-          var queryurl = 'https://api.streamable.com/oembed?url=' + item.url;
-          request(queryurl, (error, response, body) => {
-            if (error) {
-              console.dir(error);
-              return;
-            }
-
-            var data = JSON.parse(body);
-            firstline = data.html;
-            thumbnail = maximg(data.thumbnail_url);
+      function do_firstline(url) {
+        if (url.match(/imgur\.com.*\.jpg/)) {
+          firstline = "<p><img src='" + url + "' /></p>";
+          return new Promise((resolve, reject) => {
             resolve();
           });
-        });
-      } else if (item.url.match(/instagram\.com\/p\//)) {
-        promise = new Promise((resolve, reject) => {
-          var queryurl = 'https://api.instagram.com/oembed/?url=https://instagr.am/p/' + item.url.replace(/.*instagram\.com\/p\/([^/]*).*?$/, "$1");
-          request(queryurl, (error, response, body) => {
-            if (error) {
-              console.dir(error);
-              return;
-            }
+        } else if (url.match(/imgur\.com\/a\/.*/)) {
+          return new Promise((resolve, reject) => {
+            var queryurl = 'https://api.imgur.com/oembed?url=' + url;
+            request(queryurl, (error, response, body) => {
+              if (error) {
+                console.dir(error);
+                return;
+              }
 
-            var data = JSON.parse(body);
-            firstline = data.html;
-            thumbnail = maximg(data.thumbnail_url);
-            resolve();
+              var data = JSON.parse(body);
+              firstline = data.html;
+
+              request(url, (error, response, body) => {
+                if (error) {
+                  console.dir(error);
+                  return;
+                }
+
+                var cereal = cheerio.load(body);
+                var img_src = cereal("link[rel='image_src']").attr("href");
+                thumbnail = maximg(img_src);
+                resolve();
+              });
+            });
           });
-        });
+        } else if (url.match(/streamable\.com/)) {
+          return new Promise((resolve, reject) => {
+            var queryurl = 'https://api.streamable.com/oembed?url=' + url;
+            request(queryurl, (error, response, body) => {
+              if (error) {
+                console.dir(error);
+                return;
+              }
+
+              var data = JSON.parse(body);
+              firstline = data.html;
+              thumbnail = maximg(data.thumbnail_url);
+              resolve();
+            });
+          });
+        } else if (url.match(/instagram\.com\/p\//)) {
+          return new Promise((resolve, reject) => {
+            var queryurl = 'https://api.instagram.com/oembed/?url=https://instagr.am/p/' + url.replace(/.*instagram\.com\/p\/([^/]*).*?$/, "$1");
+            request(queryurl, (error, response, body) => {
+              if (error) {
+                console.dir(error);
+                return;
+              }
+
+              var data = JSON.parse(body);
+              firstline = data.html;
+              thumbnail = maximg(data.thumbnail_url);
+              resolve();
+            });
+          });
+        }
+      }
+
+      if (!item.deleted)
+        promise = do_firstline(item.url);
+      else {
+        var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+        if (newurl) {
+          newurl = newurl[1];
+          promise = do_firstline(newurl);
+        } else {
+          console.log("Can't find non-deleted URL");
+          return;
+        }
       }
 
       promise.then(() => {
         var contents = markdown_to_html(contents_md);
         var viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.member.username + "/' target='_blank'>" + item.member.username + "</a> on instagram)</em></p><br />\n";
         contents = firstline + viatext + contents;
+
+        if (item.deleted) {
+          var deletedtext = "<p><a href='" + item.url + "' target='_blank'>" + item.url + "</a> <em>(deleted)</em></p><br />\n";
+          contents = deletedtext + contents;
+        }
 
         console.log(title);
         console.log("-----");
@@ -1733,11 +1803,12 @@ function update_file_main(filename, splitted) {
               upload_video(videos[x]).then(
                 (data) => {
                   //console.dir(data);
-                  var text = "https://streamable.com/" + data.shortcode + " - " + story + timestamp;
+                  var text = "https://streamable.com/" + data.shortcode + " - " + story;
                   if (videos.length > 1)
                     text += "video " + (x_i + 1);
                   else
                     text += "video";
+                  text += timestamp;
 
                   extra[x] = text;
 
