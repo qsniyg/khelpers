@@ -23,6 +23,7 @@ var google = require('googleapis');
 var google_oauth = require('./google_oauth');
 var showdown  = require('showdown');
 showdown.setOption("simplifiedAutoLink", true);
+showdown.setOption("literalMidWordUnderscores", true);
 var showdown_converter = new showdown.Converter();
 
 require('dotenv').config();
@@ -460,7 +461,7 @@ var images_times_ran = 0;
 function create_imgur_album(deletehashes) {
   return new Promise((resolve, reject) => {
     var images = [];
-    Object.keys(deletehashes).sort().forEach((key) => {
+    Object.keys(deletehashes).sort(naturalSort).forEach((key) => {
       images.push(deletehashes[key]);
     });
 
@@ -959,6 +960,12 @@ function update_blogger_main(filename, splitted) {
       });
 
       function do_firstline(url) {
+        if (!url) {
+          return new Promise((resolve, reject) => {
+            resolve();
+          });
+        }
+
         if (url.match(/imgur\.com.*\.jpg/)) {
           firstline = "<p><img src='" + url + "' /></p>";
           return new Promise((resolve, reject) => {
@@ -1019,6 +1026,9 @@ function update_blogger_main(filename, splitted) {
               resolve();
             });
           });
+        } else {
+          console.log("Unknown url: " + url);
+          return null;
         }
       }
 
