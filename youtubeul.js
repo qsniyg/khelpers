@@ -58,7 +58,7 @@ function get_videos() {
 
 function upload_video_dm(options) {
   // disable dailymotion for now
-  if (noupload || true) {
+  if (noupload || (true && !dmupload)) {
     console.dir(options);
     process.exit();
     return;

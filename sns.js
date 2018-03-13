@@ -269,7 +269,7 @@ function get_username_from_rssit_url(url) {
 
 // https://stackoverflow.com/a/28149561
 function date_to_isotime(date) {
-  var tzoffset = (new Date()).getTimezoneOffset() * 60000;
+  var tzoffset = (new Date(date)).getTimezoneOffset() * 60000;
   return (new Date(date - tzoffset)).toISOString().slice(0, -1).replace(/\.[0-9]*$/, "");
 }
 
@@ -2405,7 +2405,7 @@ function main() {
                   end = ".jpg";
                 } else if (item.endsWith(".mp4")) {
                   igarr = igvideos;
-                  larr = limages;
+                  larr = lvideos;
                   end = ".mp4";
                 } else {
                   console.log("Unknown extension for " + item);
@@ -2429,6 +2429,20 @@ function main() {
               entrytext += limages.join("\n") + "\n";
             if (lvideos.length > 0)
               entrytext += lvideos.join("\n") + "\n";
+
+            if (limages.length !== igimages.length) {
+              console.log("Error: Mismatching images length: " + limages.length + "/" + igimages.length);
+              console.log(starting);
+              console.dir(limages);
+              console.dir(igimages);
+            }
+
+            if (lvideos.length !== igvideos.length) {
+              console.log("Error: Mismatching videos length: " + lvideos.length + "/" + igvideos.length);
+              console.log(starting);
+              console.dir(lvideos);
+              console.dir(igvideos);
+            }
 
             /*if (cereal("a").length > 0) {
               entrytext += cheerio(cereal("a")[0]).attr("href");

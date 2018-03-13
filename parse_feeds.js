@@ -123,6 +123,14 @@ function in_ignoregroups(text) {
   return false;
 }
 
+function in_nogroups(text) {
+  if (feeds_toml.general.nogroups && feeds_toml.general.nogroups.indexOf(text) >= 0) {
+    return true;
+  }
+
+  return false;
+}
+
 function in_ignorefolders(text) {
   if (feeds_toml.general.ignorefolders && feeds_toml.general.ignorefolders.indexOf(text) >= 0) {
     return true;
@@ -440,7 +448,7 @@ function parse_member(obj, options) {
 
 
   if (options) {
-    if (options.group && options.group !== "작음") {
+    if (options.group && !in_nogroups(options.group)) {
       member.group = options.group;
     }
 
@@ -509,7 +517,8 @@ function parse_member(obj, options) {
     grouptitle += parse_hangul_first(member.group) + " ";
 
     if (member.family) {
-      if (member.nicks && member.nicks[0] && member.has_user_nick)
+      if (member.nicks && member.nicks[0] &&
+          (member.has_user_nick || !(member.names && member.names[0])))
         title += member.nicks[0].roman_first;
       else if (member.names && member.names[0])
         title += member.names[0].roman_first;
@@ -537,7 +546,8 @@ function parse_member(obj, options) {
         title += member.alt;
     }
   } else {
-    if (member.nicks && member.nicks[0] && member.has_user_nick)
+    if (member.nicks && member.nicks[0] &&
+        (member.has_user_nick || !(member.names && member.names[0])))
       title += member.nicks[0].roman_first;
     else if (member.names && member.names[0])
       title += member.names[0].roman_first;
