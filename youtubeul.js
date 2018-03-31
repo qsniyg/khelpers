@@ -251,30 +251,39 @@ function main() {
         console.log(member);
 
         var name = "";
+        var member_name = "";
         if (member.group) {
-          if (member.ex) {
+          if (member.ex && !member.haitus) {
             name = "Ex-";
           }
 
-          name += parse_feeds.parse_hangul_first(member.group) + " ";
+          var grouphangul = parse_feeds.parse_hangul_first(member.group);
 
-          if (member.nicks && member.nicks[0])
-            name += member.nicks[0].roman;
-          else if (member.names && member.names[0])
-            name += member.names[0].roman;
+          if (member.nicks_roman_first)
+            member_name = member.nicks_roman_first;
+          else if (member.names_roman_first)
+            member_name = member.names_roman_first;
           else
-            name += member.alt;
+            member_name = member.alt;
+
+          if (member_name !== grouphangul)
+            name += grouphangul + " " + member_name;
+          else
+            name += grouphangul;
         } else {
-          if (member.nicks && member.nicks[0] && member.has_user_nick)
-            name += member.nicks[0].roman;
-          else if (member.names && member.names[0])
-            name += member.names[0].roman;
+          if (member.nicks_roman_first &&
+              (member.has_user_nick || !(member.names_roman_first)))
+            name += member.nicks_roman_first;
+          else if (member.names_roman_first)
+            name += member.names_roman_first;
           else
             name += member.alt;
         }
 
-        if (member.names && member.names[0])
+        if (member.names && member.names[0] && member.names[0].hangul !== member_name)
           name += " (" + member.names[0].hangul + ")";
+        else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== member_name)
+          name += " (" + member.nicks[0].hangul + ")";
 
         var firsttitle = name + " Instagram Live";
         var title = firsttitle + endtitle;

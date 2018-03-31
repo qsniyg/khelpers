@@ -126,6 +126,7 @@ function find_feed(feed, name) {
 function find_members_by_group(members, group) {
   var ret = [];
   var ignore = parse_feeds.feeds_toml.general.ignore_sns || [];
+  var ignoreex = parse_feeds.feeds_toml.general.ignore_ex || [];
 
   for (var i = 0; i < members.length; i++) {
     var member = members[i];
@@ -138,6 +139,9 @@ function find_members_by_group(members, group) {
         (!member.nicks || !member.nicks[0] || member.nicks[0].hangul !== group || member.group)) {
       continue;
     }
+
+    if (member.ex && ignoreex.indexOf(group) >= 0)
+      continue;
 
     ret.push(member);
   }
@@ -876,6 +880,7 @@ function maximg(src) {
 
   if (domain.indexOf("cdninstagram.com") >= 0 ||
       domain.match(/^instagram\..*\.fbcdn\.net/)) {
+    return src; // doesn't work anymore
     var urlstart = "https://" + domain + "/";
     var has_t = false;
     for (var i = 0; i < splitted.length; i++) {
@@ -1020,6 +1025,27 @@ function update_blogger_main(filename, splitted) {
                 return;
               }
 
+              if (body === "No Media Match") {
+                item.deleted = true;
+
+                var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+                if (newurl) {
+                  newurl = newurl[1];
+                  do_firstline(newurl).then(
+                    () => {
+                      resolve();
+                    },
+                    () => {
+                      reject();
+                    }
+                  );
+                } else {
+                  console.log("Can't find non-deleted URL");
+                  reject();
+                }
+
+                return;
+              }
               var data = JSON.parse(body);
               firstline = data.html;
               thumbnail = maximg(data.thumbnail_url);
@@ -2227,6 +2253,7 @@ function main() {
       }, {sort: {created_at: -1}}).then((content) => {
         //console.dir(content);
         parse_feeds.db.close();
+        console.log(content.length);
 
         if (content.length === 0) {
           console.log("No content");
@@ -2382,10 +2409,10 @@ function main() {
             var igvideos = [];
             cereal("img").each((i, img) => {
               var $this = cheerio(img);
-              if (cereal($this.parent("a")).length > 0) {
-                igvideos.push(cheerio($this.parent("a")).attr("href").replace(/.*\/\/localhost:[0-9]*\/player\//, ""));
+              if (cereal($this.parents("a")).length > 0) {
+                igvideos.push(cheerio($this.parents("a")).attr("href").replace(/.*\/\/localhost:[0-9]*\/player\//, "").replace(/\?.*/, ""));
               } else {
-                igimages.push($this.attr("src"));
+                igimages.push($this.attr("src").replace(/\?.*/, ""));
               }
             });
 
@@ -2425,10 +2452,12 @@ function main() {
               }
             });
 
-            if (limages.length > 0)
+            if (limages.length > 0) {
               entrytext += limages.join("\n") + "\n";
-            if (lvideos.length > 0)
+            }
+            if (lvideos.length > 0) {
               entrytext += lvideos.join("\n") + "\n";
+            }
 
             if (limages.length !== igimages.length) {
               console.log("Error: Mismatching images length: " + limages.length + "/" + igimages.length);
