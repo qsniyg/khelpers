@@ -902,6 +902,8 @@ function maximg(src) {
   if (domain === "images.streamable.com") {
     return src.replace(/\?[^/]*$/, "");
   }
+
+  return src;
 }
 
 function update_blogger_main(filename, splitted) {
@@ -1018,7 +1020,8 @@ function update_blogger_main(filename, splitted) {
           });
         } else if (url.match(/instagram\.com\/p\//)) {
           return new Promise((resolve, reject) => {
-            var queryurl = 'https://api.instagram.com/oembed/?url=https://instagr.am/p/' + url.replace(/.*instagram\.com\/p\/([^/]*).*?$/, "$1");
+            var shortcode = url.replace(/.*instagram\.com\/p\/([^/]*).*?$/, "$1");
+            var queryurl = 'https://api.instagram.com/oembed/?url=https://instagr.am/p/' + shortcode;
             request(queryurl, (error, response, body) => {
               if (error) {
                 console.dir(error);
@@ -1026,7 +1029,11 @@ function update_blogger_main(filename, splitted) {
               }
 
               if (body === "No Media Match") {
-                item.deleted = true;
+                if (shortcode.length < 20) {
+                  item.deleted = true;
+                } else {
+                  item["private"] = true;
+                }
 
                 var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
                 if (newurl) {
@@ -1076,8 +1083,11 @@ function update_blogger_main(filename, splitted) {
         var viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.member.username + "/' target='_blank'>" + item.member.username + "</a> on instagram)</em></p><br />\n";
         contents = firstline + viatext + contents;
 
-        if (item.deleted) {
-          var deletedtext = "<p><a href='" + item.url + "' target='_blank'>" + item.url + "</a> <em>(deleted)</em></p><br />\n";
+        if (item.deleted || item["private"]) {
+          var deltxt = " <em>(deleted)</em>";
+          if (item["private"])
+            deltxt = "";
+          var deletedtext = "<p><a href='" + item.url + "' target='_blank'>" + item.url + "</a>" + deltxt + "</p><br />\n";
           contents = deletedtext + contents;
         }
 

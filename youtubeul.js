@@ -247,7 +247,7 @@ function main() {
       if (!member)
         continue;
 
-      if (member.obj.url.indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
+      if (member.obj.url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
         console.log(member);
 
         var name = "";
