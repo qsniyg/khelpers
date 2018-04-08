@@ -247,7 +247,13 @@ function main() {
       if (!member)
         continue;
 
-      if (member.obj.url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
+      var member_url;
+      if (member.instagram_obj)
+        member_url = member.instagram_obj.url;
+      else if (member.obj)
+        member_url = member.obj.url;
+
+      if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
         console.log(member);
 
         var name = "";

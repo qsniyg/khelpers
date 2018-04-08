@@ -24,8 +24,12 @@ var feeds_json;
 var feeds_toml;
 
 var toplevel_feed;
+var toplevel_feeds = {};
 module.exports.toplevel_feed = toplevel_feed;
+module.exports.toplevel_feeds = toplevel_feeds;
 module.exports.members = null;
+
+var members_by_group = {};
 
 
 // https://stackoverflow.com/a/10073788
@@ -94,6 +98,10 @@ function tree_to_object(tree) {
   } else {
     return tree;
   }
+}
+
+function normalize_alt(alt) {
+  return alt.replace(/^\s*(.*?)\s*(?:\#.*)?$/, "$1");
 }
 
 function get_user_roman(text, obj) {
@@ -432,7 +440,7 @@ function upush(array, item) {
 }
 
 function get_username_from_rssit_url(url) {
-  return url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1");
+  return url.replace(/.*\/(?:instagram|twitter|weibo)\/u\/([^/?&]*).*$/, "$1");
 }
 
 function parse_member(obj, options) {
@@ -449,7 +457,11 @@ function parse_member(obj, options) {
 
   var username = get_username_from_rssit_url(obj.url);
   if (username && username != obj.url) {
-    member.username = username;
+    if (options && options.site) {
+      member[options.site + "_username"] = username;
+    } else {
+      member.username = username;
+    }
   }
 
   var name = get_name(obj.name, member.username);
@@ -478,7 +490,11 @@ function parse_member(obj, options) {
     }
   }
 
-  member.obj = obj;
+  if (options && options.site) {
+    member[options.site + "_obj"] = obj;
+  } else {
+    member.obj = obj;
+  }
 
   member.tags = JSON.parse(JSON.stringify(feeds_toml.general.defaulttags));
 
@@ -593,17 +609,154 @@ function parse_member(obj, options) {
   return member;
 }
 
+function do_sns(site) {
+  if (!feeds_toml[site]) {
+    console.error("[" + site + "] not in feeds.toml");
+    return;
+  }
+
+  var obj = tree_to_object(feeds_json);
+  var toplevel = obj;
+  for (var i = 0; i < feeds_toml[site].path.length; i++) {
+    if (feeds_toml[site].path[i] in toplevel) {
+      toplevel = toplevel[feeds_toml[site].path[i]];
+    } else {
+      console.error("Unable to find path:" + feeds_toml[site].path[i]);
+      return;
+    }
+  }
+
+  module.exports.toplevel_feeds[site] = toplevel;
+
+  var groups = {};
+  for (var folder in toplevel) {
+    if (typeof toplevel[folder] !== "object")
+      continue;
+
+    if (!feeds_toml[site].categories) {
+      if (!in_ignoregroups(folder))
+        groups[folder] = toplevel[folder];
+      continue;
+    }
+
+    for (var group in toplevel[folder]) {
+      if (typeof toplevel[folder][group] !== "object" || in_ignoregroups(group))
+        continue;
+      groups[group] = toplevel[folder][group];
+    }
+  }
+
+  var members = [];
+
+  for (var group in groups) {
+    var groupname = group.replace(/ *#.*/, "");
+    /*console.log(group);
+      console.log(parse_hangul(group));
+      console.log("---");*/
+
+    if (groups[group].$$parent) {
+      var group_obj = groups[group];
+      for (var member in group_obj) {
+        var member_obj = group_obj[member];
+
+        if (member === "$$parent")
+          continue;
+
+        if (in_ignorefolders(member))
+          continue;
+
+        if (member === "前") {
+          var exes = flatten_obj(member_obj);
+          for (var ex in exes) {
+            var options = {ex: true, group: groupname, site};
+            if (exes[ex].parents.indexOf("잠정") >= 0) {
+              options.haitus = true;
+            }
+            members.push(parse_member(exes[ex].obj, options));
+          }
+        } else if (member === "가족") {
+          var family = flatten_obj(member_obj);
+          for (var f in family) {
+            members.push(parse_member(family[f].obj, {family: true, group: groupname, site}));
+          }
+        }
+        members.push(parse_member(member_obj, {group: groupname, site}));
+      }
+    } else {
+      members.push(parse_member(groups[group], {site}));
+    }
+
+    //console.log("");
+  }
+
+  if (module.exports.members) {
+    members.forEach((member) => {
+      if (!member)
+        return;
+
+      if (member.group in members_by_group) {
+        var found = false;
+        members_by_group[member.group].forEach((gmember) => {
+          if (found)
+            return;
+
+          if (normalize_alt(gmember.alt) !== normalize_alt(member.alt)) {
+            // TODO: add more fuzzy checks
+            return;
+          }
+
+          if (!gmember[site + "_username"])
+            gmember[site + "_username"] = member[site + "_username"];
+
+          if (!gmember[site + "_obj"])
+            gmember[site + "_obj"] = member[site + "_obj"];
+
+          found = true;
+        });
+
+        if (!found)
+          module.exports.members.push(member);
+      } else {
+        module.exports.members.push(member);
+      }
+    });
+  } else {
+    module.exports.members = members;
+  }
+
+  module.exports.members.forEach((member) => {
+    if (!member)
+      return;
+
+    if (!members_by_group[member.group])
+      members_by_group[member.group] = [];
+
+    members_by_group[member.group].push(member);
+  });
+
+  return members;
+}
+
 function parse_feeds_inner() {
   return new Promise((resolve, reject) => {
     Promise.all([read_feeds(), read_toml()]).then(
       () => {
+        if (true) {
+          do_sns("instagram");
+          do_sns("twitter");
+          do_sns("weibo");
+
+          resolve(module.exports.members);
+          return;
+        }
+
         var obj = tree_to_object(feeds_json);
         var toplevel = obj;
-        for (var i = 0; i < feeds_toml.general.path.length; i++) {
-          if (feeds_toml.general.path[i] in toplevel) {
-            toplevel = toplevel[feeds_toml.general.path[i]];
+        for (var i = 0; i < feeds_toml.general.igpath.length; i++) {
+          if (feeds_toml.general.igpath[i] in toplevel) {
+            toplevel = toplevel[feeds_toml.general.igpath[i]];
           } else {
-            console.error("Unable to find path:" + feeds_toml.general.path[i]);
+            console.error("Unable to find path:" + feeds_toml.general.igpath[i]);
             reject();
             return;
           }
@@ -615,6 +768,12 @@ function parse_feeds_inner() {
         for (var folder in instagram) {
           if (typeof instagram[folder] !== "object")
             continue;
+
+          if (!feeds_toml.general.igcategories) {
+            if (!in_ignoregroups(folder))
+              groups[group] = instagram[folder];
+            continue;
+          }
 
           for (var group in instagram[folder]) {
             if (typeof instagram[folder][group] !== "object" || in_ignoregroups(group))

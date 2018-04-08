@@ -125,13 +125,24 @@ function find_feed(feed, name) {
 
 function find_members_by_group(members, group) {
   var ret = [];
-  var ignore = parse_feeds.feeds_toml.general.ignore_sns || [];
+  var ignore_instagram = parse_feeds.feeds_toml.instagram.ignore_sns || [];
+  var ignore_twitter = parse_feeds.feeds_toml.twitter.ignore_sns || [];
+  var ignore_weibo = parse_feeds.feeds_toml.weibo.ignore_sns || [];
   var ignoreex = parse_feeds.feeds_toml.general.ignore_ex || [];
 
   for (var i = 0; i < members.length; i++) {
     var member = members[i];
 
-    if (!member || ignore.indexOf(get_username_from_rssit_url(member.obj.url)) >= 0)
+    if (!member)
+      continue;
+
+    if (member.instagram_obj && ignore_instagram.indexOf(get_username_from_rssit_url(member.instagram_obj.url)) >= 0)
+      continue;
+
+    if (member.twitter_obj && ignore_twitter.indexOf(get_username_from_rssit_url(member.twitter_obj.url)) >= 0)
+      continue;
+
+    if (member.weibo_obj && ignore_weibo.indexOf(get_username_from_rssit_url(member.weibo_obj.url)) >= 0)
       continue;
 
     if (member.alt !== group &&
@@ -169,6 +180,8 @@ function get_instagram_rssit_url(url) {
 }
 
 var instagram_username_names = {};
+var twitter_username_names = {};
+var weibo_username_names = {};
 
 function comment_to_text(comment) {
   var text = "-\n\n[@" + escape_text(comment.owner.username) + "](https://www.instagram.com/" + comment.owner.username + "/)";
@@ -268,7 +281,16 @@ function quote_text(text) {
 }
 
 function get_username_from_rssit_url(url) {
-  return url.replace(/.*\/instagram\/u\/([^/?&]*).*$/, "$1");
+  return url.replace(/.*\/(?:instagram|twitter|weibo)\/u\/([^/?&]*).*$/, "$1");
+}
+
+function get_home_from_rssit_url(url) {
+  if (url.indexOf("/instagram/") >= 0)
+    return "https://www.instagram.com/" + get_username_from_rssit_url(url) + "/";
+  else if (url.indexOf("/twitter/") >= 0)
+    return "https://www.twitter.com/" + get_username_from_rssit_url(url);
+  else if (url.indexOf("/weibo/u/") >= 0)
+    return "https://www.weibo.com/u/" + get_username_from_rssit_url(url);
 }
 
 // https://stackoverflow.com/a/28149561
@@ -824,7 +846,7 @@ function parse_txt(filename, splitted) {
 
     var member = null;
     for (var x = 0; x < group_members.length; x++) {
-      var newusername = get_username_from_rssit_url(group_members[x].obj.url);
+      var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
       if (username.toLowerCase() === newusername.toLowerCase()) {
         member = group_members[x];
         break;
@@ -1618,7 +1640,7 @@ function update_reddit(filename) {
 
   var group_members = find_members_by_group(parse_feeds.members, group_hangul);
   for (var i = 0; i < group_members.length; i++) {
-    var username = get_username_from_rssit_url(group_members[i].obj.url);
+    var username = get_username_from_rssit_url(group_members[i].instagram_obj.url);
     if (username.toLowerCase() === groupname.toLowerCase())
       forcegroup = true;
     if (username in usernames)
@@ -2198,34 +2220,56 @@ function main() {
 
       //var feed_urls = get_feed_urls(find_feed(parse_feeds.toplevel_feed, group));
       //console.log(feed_urls);
-      var important_usernames = [];
+      var important_instagram_usernames = [];
+      var important_twitter_usernames = [];
+      var important_weibo_usernames = [];
       for (var i = 0; i < members.length; i++) {
         if (!members[i])
           continue;
 
-        var url = members[i].obj.url;
-        if (url.indexOf("/instagram/") < 0)
-          continue;
+        var url;
+        var member_username;
 
-        var member_username = get_username_from_rssit_url(url);
-        important_usernames.push(member_username);
+        if (members[i].instagram_obj) {
+          url = members[i].instagram_obj.url;
+          if (url.indexOf("/instagram/") >= 0) {
+            member_username = get_username_from_rssit_url(url);
+            important_instagram_usernames.push(member_username);
 
-        if (!members[i].nicks)
-          continue;
+            if (!members[i].nicks)
+              continue;
 
-        /*if ((members[i].group && members[i].group !== group) ||
-            !members[i].group) {
-          instagram_username_names[member_username] = members[i].title.toLowerCase();
-          //instagram_username_names[member_username] = parse_feeds.parse_hangul_first(members[i].group) + " ";
-        } else {
-          instagram_username_names[member_username] = "";
-          instagram_username_names[member_username] += members[i].nicks[0].roman_first;
-          }*/
-        /*instagram_username_names[member_username] = parse_feeds.strip(members[i].title.toLowerCase()
-                                                                      .replace(parse_feeds.parse_hangul_first(group).toLowerCase(), "")
-                                                                      .replace(/\( *\/, "(") // replace *\/
-                                                                      .replace(/ex-/, ""));*/
-        instagram_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
+            instagram_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
+          }
+        }
+
+        if (members[i].twitter_obj) {
+          url = members[i].twitter_obj.url;
+          if (url.indexOf("/twitter/") >= 0) {
+            member_username = get_username_from_rssit_url(url);
+            important_twitter_usernames.push(member_username);
+
+            if (!members[i].nicks)
+              continue;
+
+            twitter_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
+          }
+        }
+
+        if (members[i].weibo_obj) {
+          url = members[i].weibo_obj.url;
+          if (url.indexOf("/weibo/") >= 0) {
+            member_username = members[i].weibo_obj.title;
+            var userid = get_username_from_rssit_url(url);
+            important_weibo_usernames.push(member_username);
+
+            if (!members[i].nicks)
+              continue;
+
+            weibo_username_names[userid] = parse_name_from_title(members[i].title, group).toLowerCase();
+            weibo_username_names[member_username] = weibo_username_names[userid];
+          }
+        }
       }
 
       var group_members = find_members_by_group(members, group);
@@ -2237,7 +2281,12 @@ function main() {
 
       var urls = [];
       for (var i = 0; i < group_members.length; i++) {
-        urls.push(group_members[i].obj.url);
+        if (group_members[i].instagram_obj)
+          urls.push(group_members[i].instagram_obj.url);
+        if (group_members[i].twitter_obj)
+          urls.push(group_members[i].twitter_obj.url);
+        if (group_members[i].weibo_obj)
+          urls.push(group_members[i].weibo_obj.url);
       }
 
       var starttime = 9007199254740991;
@@ -2326,18 +2375,40 @@ function main() {
         var promises_done = 0;
         for (var member_url in mcontent) {
           var nick;
+          var subfolder;
           for (var x = 0; x < group_members.length; x++) {
-            if (group_members[x].obj.url === member_url) {
-              //nick = group_members[x].nicks[0].roman_first;
-              nick = instagram_username_names[get_username_from_rssit_url(member_url)];
+            if (group_members[x].instagram_obj) {
+              if (group_members[x].instagram_obj.url === member_url) {
+                //nick = group_members[x].nicks[0].roman_first;
+                nick = instagram_username_names[get_username_from_rssit_url(member_url)];
+              }
+            } else if (group_members[x].twitter_obj) {
+              if (group_members[x].twitter_obj.url === member_url) {
+                nick = twitter_username_names[get_username_from_rssit_url(member_url)];
+              }
+            } else if (group_members[x].weibo_obj) {
+              if (group_members[x].weibo_obj.url === member_url) {
+                nick = weibo_username_names[get_username_from_rssit_url(member_url)];
+              }
             }
           }
 
-          mentries[nick] = {};
-          mlinks[nick] = "https://www.instagram.com/" + get_username_from_rssit_url(member_url) + "/";
+          if (member_url.indexOf("/instagram/") >= 0)
+            subfolder = "instagram";
+          else if (member_url.indexOf("/twitter/") >= 0)
+            subfolder = "twitter";
+          else if (member_url.indexOf("/weibo/") >= 0)
+            subfolder = "weibo";
+
+          if (!mentries[nick])
+            mentries[nick] = {};
+          //mlinks[nick] = "https://www.instagram.com/" + get_username_from_rssit_url(member_url) + "/";
+          if (!mlinks[nick])
+            mlinks[nick] = [];
+          mlinks[nick].push(get_home_from_rssit_url(member_url));
           var mmember = mcontent[member_url];
           var member_username = get_username_from_rssit_url(mmember[0].url);
-          var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, "instagram", member_username));
+          var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, subfolder, member_username));
           var items = fs.readdirSync(dl_path);
           items = items.sort(naturalSort);
           for (var x = 0; x < mmember.length; x++) {
@@ -2494,11 +2565,11 @@ function main() {
               entrytext += "\n" + entry.content + "\n";
 
               if (parse_feeds.has_hangul(entry.content, false)) {
-                entrytext+= "\nenglish:\n\n" + entry.content + "\n";
+                entrytext += "\nenglish:\n\n" + entry.content + "\n";
               }
             }
 
-            if (!entry.story && !entry.dp) {
+            if (!entry.story && !entry.dp && subfolder === "instagram") {
               promises.push((function(entry, entrytext, mentries, nick) {
                 return new Promise((resolve, reject) => {
                   //console.log(get_instagram_rssit_url(entry.url) + "&count=-1")
@@ -2523,8 +2594,9 @@ function main() {
                             /*console.log(entry);
                             console.log(mentries);
                             console.log(nick);*/
+                            var node;
                             try {
-                              var node = JSON.parse(body);
+                              node = JSON.parse(body);
                             } catch (e) {
                               console.log("can't parse JSON");
                               resolve();
@@ -2552,7 +2624,7 @@ function main() {
                                 var comment = comments[j].node;
                                 if (comment.created_at in importantcomments)
                                   continue;
-                                if (important_usernames.indexOf(comment.owner.username) >= 0) {
+                                if (important_instagram_usernames.indexOf(comment.owner.username) >= 0) {
                                   process_comment(comment);
                                 } else if (user && user === comment.owner.username) {
                                   //importantcomments.push(comment_to_text(comment));
@@ -2606,7 +2678,27 @@ function main() {
               Array.prototype.push.apply(newarr, mentries[name][key]);
             });
 
-            sorted_entries.push("## [" + name.toLowerCase() + "](" + mlinks[name] + ")\n\n" + newarr.join("\n*****\n\n"));
+            var iglink;
+            var twlink;
+            var weilink;
+            mlinks[name].forEach((link) => {
+              if (link.indexOf("instagram.com/") >= 0)
+                iglink = link;
+              else if (link.indexOf("twitter.com/") >= 0)
+                twlink = link;
+              else if (link.indexOf("weibo.com/") >= 0)
+                weilink = link;
+            });
+
+            var ourlink;
+            if (iglink)
+              ourlink = iglink;
+            else if (twlink)
+              ourlink = twlink;
+            else if (weilink)
+              ourlink = weilink;
+
+            sorted_entries.push("## [" + name.toLowerCase() + "](" + ourlink + ")\n\n" + newarr.join("\n*****\n\n"));
           });
           var sorted_text = sorted_entries.join("\n*****\n\n");
 
