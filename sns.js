@@ -26,7 +26,7 @@ showdown.setOption("simplifiedAutoLink", true);
 showdown.setOption("literalMidWordUnderscores", true);
 var showdown_converter = new showdown.Converter();
 
-require('dotenv').config();
+//require('dotenv').config();
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -717,6 +717,8 @@ function parse_txt(filename, splitted) {
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo\.com\//) &&
         !splitted[i].match(/^https?:\/\/[^/.]*cdninstagram\.com\//) &&
         !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//) &&
+        !splitted[i].match(/^https?:\/\/(?:www\.)?twitter\.com\//) &&
+        !splitted[i].match(/^https?:\/\/(?:www\.)?weibo\.com\//) &&
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?imgur\.com\//) &&
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?streamable\.com\//)) {
       continue;
@@ -749,6 +751,12 @@ function parse_txt(filename, splitted) {
     var story = "";
     var is_title = false;
     var deleted = false;
+
+    var site = "instagram";
+    if (url.indexOf("twitter.com/") >= 0)
+      site = "twitter";
+    else if (url.indexOf("weibo.com/") >= 0)
+      site = "weibo";
 
     if (annotation && annotation.match(/title/)) {
       is_title = true;
@@ -846,7 +854,15 @@ function parse_txt(filename, splitted) {
 
     var member = null;
     for (var x = 0; x < group_members.length; x++) {
-      var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
+      var newusername;
+      if (group_members[x].instagram_obj && site === "instagram")
+        newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
+      if (group_members[x].twitter_obj && site === "twitter")
+        newusername = get_username_from_rssit_url(group_members[x].twitter_obj.url);
+      if (group_members[x].weibo_obj && site === "weibo")
+        newusername = get_username_from_rssit_url(group_members[x].weibo_obj.url);
+
+      //var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
       if (username.toLowerCase() === newusername.toLowerCase()) {
         member = group_members[x];
         break;
@@ -863,6 +879,7 @@ function parse_txt(filename, splitted) {
       "annotation": annotation,
       "timestamp": timestamp,
       "deleted": deleted,
+      "site": site,
       "url": url,
       "anyurl": anyurl,
       "story": story,
@@ -925,6 +942,19 @@ function maximg(src) {
     return src.replace(/\?[^/]*$/, "");
   }
 
+  if (domain === "pbs.twimg.com" &&
+      src.indexOf("pbs.twimg.com/media/") >= 0) {
+    return src
+      .replace(/(\/[^?&]*)([^/]*)[?&]format=([^&]*)/, "$1.$3$2")
+      .replace(/(\/[^?&]*)[?&][^/]*$/, "$1")
+      .replace(/(:[^/]*)?$/, ":orig");
+  }
+
+  if (domain === "pbs.twimg.com" &&
+      src.indexOf("pbs.twimg.com/profile_images/") >= 0) {
+    return src.replace(/_bigger\.([^/_]*)$/, "\.$1").replace(/_normal\.([^/_]*)$/, "\.$1").replace(/_[0-9]+x[0-9]+\.([^/_]*)$/, "\.$1");
+  }
+
   return src;
 }
 
@@ -961,11 +991,22 @@ function update_blogger_main(filename, splitted) {
       if (item.type === "story")
         updatetext = "Story";
 
-      var title = item.member.title + " Instagram " + updatetext + " [" + ourday + "]";
+      var site = " Instagram ";
+      if (item.site === "twitter")
+        site = " Twitter ";
+      else if (item.site === "weibo")
+        site = " Weibo ";
+
+      var title = item.member.title + site + updatetext + " [" + ourday + "]";
 
       var labels = [];
       labels.push("SNS");
-      labels.push("Instagram");
+      if (item.site === "instagram")
+        labels.push("Instagram");
+      else if (item.site === "twitter")
+        labels.push("Twitter");
+      else if (item.site === "weibo")
+        labels.push("Weibo");
       if (item.engtext)
         labels.push("Translation");
       if (item.member.group) {
@@ -997,6 +1038,7 @@ function update_blogger_main(filename, splitted) {
 
         if (url.match(/imgur\.com.*\.jpg/)) {
           firstline = "<p><img src='" + url + "' /></p>";
+          thumbnail = url;
           return new Promise((resolve, reject) => {
             resolve();
           });
@@ -1081,6 +1123,35 @@ function update_blogger_main(filename, splitted) {
               resolve();
             });
           });
+        } else if (url.match(/twitter\.com\//)) {
+          return new Promise((resolve, reject) => {
+            var queryurl = 'https://publish.twitter.com/oembed?url=' + url;
+            request(queryurl, (error, response, body) => {
+              if (error) {
+                console.dir(error);
+                return;
+              }
+
+              var data = JSON.parse(body);
+
+              var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+              if (newurl) {
+                newurl = newurl[1];
+                do_firstline(newurl).then(
+                  () => {
+                    firstline = data.html;
+                    resolve();
+                  },
+                  () => {
+                    reject();
+                  }
+                );
+              } else {
+                console.log("Can't find non-twitter URL");
+                reject();
+              }
+            });
+          });
         } else {
           console.log("Unknown url: " + url);
           return null;
@@ -1102,7 +1173,13 @@ function update_blogger_main(filename, splitted) {
 
       promise.then(() => {
         var contents = markdown_to_html(contents_md);
-        var viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.member.username + "/' target='_blank'>" + item.member.username + "</a> on instagram)</em></p><br />\n";
+        var viatext;
+        if (item.site === "instagram")
+          viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.username + "/' target='_blank'>" + item.username + "</a> on instagram)</em></p><br />\n";
+        else if (item.site === "twitter")
+          viatext = "\n<p><em>(via <a href='https://www.twitter.com/" + item.username + "' target='_blank'>@" + item.username + "</a> on twitter)</em></p><br />\n";
+        else if (item.site === "weibo")
+          viatext = "\n<p><em>(via <a href='https://www.weibo.com/" + item.username + "' target='_blank'>" + item.username + "</a> on weibo)</em></p><br />\n";
         contents = firstline + viatext + contents;
 
         if (item.deleted || item["private"]) {
@@ -1112,14 +1189,6 @@ function update_blogger_main(filename, splitted) {
           var deletedtext = "<p><a href='" + item.url + "' target='_blank'>" + item.url + "</a>" + deltxt + "</p><br />\n";
           contents = deletedtext + contents;
         }
-
-        console.log(title);
-        console.log("-----");
-        console.log(contents);
-        console.log("-----");
-        console.log(labels);
-        console.log("-----");
-        console.log("=====");
 
         var post = {
           title: title,
@@ -1131,6 +1200,14 @@ function update_blogger_main(filename, splitted) {
         }
         posts.push(post);
         current_count++;
+
+        console.log(title);
+        console.log("-----");
+        console.log(post.content);
+        console.log("-----");
+        console.log(labels);
+        console.log("-----");
+        console.log("=====");
 
         if (current_count >= parsed.items_count) {
           do_blogger_posts(posts);
@@ -1336,6 +1413,11 @@ function update_twitter_main(filename, splitted) {
       }
 
       var text = "[ig";
+      if (item.site === "twitter")
+        text = "[tw";
+      else if (item.site === "weibo")
+        text = "[weibo";
+
       if (item.type === "story")
         text += " story";
       else if (item.type === "dp")
@@ -1532,6 +1614,11 @@ function update_reddit(filename) {
   var group_hangul = fn_split[0];
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
 
+  var namespace = parse_feeds.feeds_toml.general;
+  if (group_hangul in parse_feeds.feeds_toml) {
+    namespace = parse_feeds.feeds_toml[group_hangul];
+  }
+
   var start = fn_split[1];
   var end = fn_split[2].replace(/[^0-9]*/g, "");
 
@@ -1554,6 +1641,8 @@ function update_reddit(filename) {
   var onlyone = true;
   var personcount = 0;
   var instagram_count = 0;
+  var twitter_count = 0;
+  var weibo_count = 0;
   var lastlink = null;
   var lastinstagram = null;
   var titlelink = null;
@@ -1588,6 +1677,10 @@ function update_reddit(filename) {
       if (splitted[i].indexOf("www.instagram.com") >= 0) {
         instagram_count++;
         lastinstagram = lastlink;
+      } else if (splitted[i].indexOf("twitter.com") >= 0) {
+        twitter_count++;
+      } else if (splitted[i].indexOf("weibo.com") >= 0) {
+        weibo_count++;
       }
 
       nextlink = false;
@@ -1640,10 +1733,19 @@ function update_reddit(filename) {
 
   var group_members = find_members_by_group(parse_feeds.members, group_hangul);
   for (var i = 0; i < group_members.length; i++) {
-    var username = get_username_from_rssit_url(group_members[i].instagram_obj.url);
-    if (username.toLowerCase() === groupname.toLowerCase())
+    var instagram_username, twitter_username, weibo_username;
+    if (group_members[i].instagram_obj)
+      instagram_username = get_username_from_rssit_url(group_members[i].instagram_obj.url);
+    if (group_members[i].twitter_obj)
+      twitter_username = get_username_from_rssit_url(group_members[i].twitter_obj.url);
+    if (group_members[i].weibo_obj)
+      weibo_username = get_username_from_rssit_url(group_members[i].weibo_obj.url);
+
+    if (group_members[i].nicks[0].hangul === group_hangul)
       forcegroup = true;
-    if (username in usernames)
+    if (instagram_username in usernames ||
+        twitter_username in usernames ||
+        weibo_username in usernames)
       users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
   }
 
@@ -1661,7 +1763,7 @@ function update_reddit(filename) {
 
   var updates;
 
-  if (lastinstagram) {
+  if (lastinstagram || twitter_count > 0 || weibo_count > 0) {
     if (onlyone) {
       updates = "Update";
     } else {
@@ -1675,7 +1777,22 @@ function update_reddit(filename) {
     }
   }
 
-  var title = prefix + " Instagram " + updates + " [" + timestr + "]";
+  var site = " SNS ";
+  if (instagram_count > 0 &&
+      twitter_count === 0 &&
+      weibo_count === 0) {
+    site = " Instagram ";
+  } else if (instagram_count === 0 &&
+             twitter_count > 0 &&
+             weibo_count === 0) {
+    site = " Twitter ";
+  } else if (instagram_count === 0 &&
+             twitter_count === 0 &&
+             weibo_count > 0) {
+    site = " Weibo ";
+  }
+
+  var title = prefix + site + updates + " [" + timestr + "]";
   console.log(title);
 
   var reddit = parse_feeds.feeds_toml.reddit[group_hangul];
@@ -1687,13 +1804,16 @@ function update_reddit(filename) {
 
   var key = parse_feeds.feeds_toml.general.encrypt_key;
   var encryptor = require('simple-encryptor')(key);
-  var reddit_password = encryptor.decrypt(process.env.REDDIT_PASSWORD);
+  var reddit_clientid = namespace.reddit_client_id;
+  var reddit_clientsecret = namespace.reddit_client_secret;
+  var reddit_username = namespace.reddit_username;
+  var reddit_password = encryptor.decrypt(namespace.reddit_password);
 
   const r = new Snoowrap({
     userAgent: 'pc:khelpers:v0.0.1',
-    clientId: process.env.REDDIT_CLIENT_ID,
-    clientSecret: process.env.REDDIT_CLIENT_SECRET,
-    username: process.env.REDDIT_USERNAME,
+    clientId: reddit_clientid,
+    clientSecret: reddit_clientsecret,
+    username: reddit_username,
     password: reddit_password
   });
 
@@ -1765,7 +1885,9 @@ function update_file_main(filename, splitted) {
     if (!splitted[i].match(/^https?:\/\/[^/.]*\.instagram\.com\//) &&
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?weibo\.com\//) &&
         !splitted[i].match(/^https?:\/\/[^/.]*cdninstagram\.com\//) &&
-        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//)) {
+        !splitted[i].match(/^https?:\/\/instagram\..*\.fbcdn\.net\//) &&
+        !splitted[i].match(/^https?:\/\/(?:www\.)?twitter.com\//) &&
+        !splitted[i].match(/^https?:\/\/(?:www\.)?weibo.com\//)) {
       continue;
     }
 
@@ -1916,15 +2038,21 @@ function update_file_main(filename, splitted) {
   }
 
   Promise.all(promises).then(() => {
+    if (Object.keys(uploaded_images).length <= 1) {
+      replace_lines(filename, splitted, extra, null);
+      return;
+    }
+
     upload_images(uploaded_images).then(
-        (data) => {
-          //console.log(data);
-          return data;
-        },
-        (err) => {
-          console.dir(err);
-          return null;
-        }
+      (data) => {
+        //console.log(data);
+        return data;
+      },
+      (err) => {
+        console.error("Error uploading final album");
+        console.dir(err);
+        return null;
+      }
     ).then((album_data) => {
       replace_lines(filename, splitted, extra, album_data);
       return;
@@ -2382,11 +2510,15 @@ function main() {
                 //nick = group_members[x].nicks[0].roman_first;
                 nick = instagram_username_names[get_username_from_rssit_url(member_url)];
               }
-            } else if (group_members[x].twitter_obj) {
+            }
+
+            if (!nick && group_members[x].twitter_obj) {
               if (group_members[x].twitter_obj.url === member_url) {
                 nick = twitter_username_names[get_username_from_rssit_url(member_url)];
               }
-            } else if (group_members[x].weibo_obj) {
+            }
+
+            if (!nick && group_members[x].weibo_obj) {
               if (group_members[x].weibo_obj.url === member_url) {
                 nick = weibo_username_names[get_username_from_rssit_url(member_url)];
               }
@@ -2423,6 +2555,10 @@ function main() {
               content: null
             };
             var has_nonblank = false;
+
+            if (subfolder === "twitter" &&
+                text.match(/https?:\/\/www\.instagram\.com\/p\/[^ ]* *$/))
+              return;
 
             if (trim_text(text) === "(n/a)") {
               entry.empty = true;

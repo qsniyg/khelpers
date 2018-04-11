@@ -321,7 +321,7 @@ function strip(x) {
 }
 module.exports.strip = strip;
 
-function get_name(text, username) {
+function get_name(text, member) {
   if (text.length < 2)
     return;
 
@@ -331,9 +331,42 @@ function get_name(text, username) {
     "has_user_nick": false
   };
 
+  var alt = {};
+
+  function parse_alt(alt, member, site) {
+    if (!member[site + "_username"])
+      return;
+
+    var username = member[site + "_username"];
+    var key = site + "/@" + username;
+    if (key in feeds_toml) {
+      var newalt = feeds_toml[key];
+      for (var akey in newalt) {
+        alt[akey] = newalt[akey];
+      }
+    }
+  }
+
+  parse_alt(alt, member, "instagram");
+  parse_alt(alt, member, "twitter");
+  parse_alt(alt, member, "weibo");
+
+  if ("names" in alt) {
+    alt.names.forEach((x) => {
+      ret.names.push(parse_name_obj(x, alt));
+    });
+  }
+
+  if ("nicks" in alt) {
+    alt.nicks.forEach((x) => {
+      //ret.has_user_nick = true;
+      ret.nicks.push(parse_hangul_obj(x, false, alt));
+    });
+  }
+
   if (text[0] === "@") {
-    if (text in feeds_toml) {
-      var alt = feeds_toml[text];
+    if (ret.names.length > 0 || ret.nicks.length > 0/*text in feeds_toml*/) {
+      /*var alt = feeds_toml[text];
 
       alt.names.forEach((x) => {
         ret.names.push(parse_name_obj(x, feeds_toml[text]));
@@ -341,7 +374,7 @@ function get_name(text, username) {
 
       alt.nicks.forEach((x) => {
         ret.nicks.push(parse_hangul_obj(x, false, feeds_toml[text]));
-      });
+      });*/
 
       return ret;
     } else {
@@ -349,9 +382,8 @@ function get_name(text, username) {
     }
   }
 
-  var alt = {};
 
-  if (username && ("@" + username) in feeds_toml) {
+  /*if (username && ("@" + username) in feeds_toml) {
     alt = feeds_toml["@" + username];
 
     if ("names" in alt) {
@@ -366,7 +398,7 @@ function get_name(text, username) {
         ret.nicks.push(parse_hangul_obj(x, false, alt));
       });
     }
-  }
+  }*/
 
   ret.comment = strip(text.replace(/.*# *(.*)$/, "$1"));
   text = strip(text.replace(/#.*$/, ""));
@@ -464,7 +496,7 @@ function parse_member(obj, options) {
     }
   }
 
-  var name = get_name(obj.name, member.username);
+  var name = get_name(obj.name, member);
   if (name && (name.names || name.nicks)) {
     member.names = name.names;
     member.nicks = name.nicks;
