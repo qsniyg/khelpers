@@ -32,6 +32,8 @@ var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
 moment.tz.setDefault(tz_name);
 
+var weibo_userids_to_usernames = {};
+
 function reset_date(d) {
   var m = moment();
   if (d)
@@ -842,6 +844,7 @@ function parse_txt(filename, splitted) {
 
     var user = markdown_to_text(current_user);
     var userurl = current_user.replace(/.*\((http[^)]*)\).*/, "$1");
+    var usersite = userurl.replace(/^https?:\/\/(?:[a-z]*\.)?([^/.]*)\..*/, "$1");
     var username = userurl.replace(/.*\.com\/([^/]*).*?$/, "$1");
     if (user.match(/\(.*'s/)) {
       // family member
@@ -855,11 +858,11 @@ function parse_txt(filename, splitted) {
     var member = null;
     for (var x = 0; x < group_members.length; x++) {
       var newusername;
-      if (group_members[x].instagram_obj && site === "instagram")
+      if (group_members[x].instagram_obj && usersite === "instagram")
         newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
-      if (group_members[x].twitter_obj && site === "twitter")
+      if (group_members[x].twitter_obj && usersite === "twitter")
         newusername = get_username_from_rssit_url(group_members[x].twitter_obj.url);
-      if (group_members[x].weibo_obj && site === "weibo")
+      if (group_members[x].weibo_obj && usersite === "weibo")
         newusername = get_username_from_rssit_url(group_members[x].weibo_obj.url);
 
       //var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
@@ -1098,29 +1101,31 @@ function update_blogger_main(filename, splitted) {
                 } else {
                   item["private"] = true;
                 }
-
-                var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
-                if (newurl) {
-                  newurl = newurl[1];
-                  do_firstline(newurl).then(
-                    () => {
-                      resolve();
-                    },
-                    () => {
-                      reject();
-                    }
-                  );
-                } else {
-                  console.log("Can't find non-deleted URL");
-                  reject();
-                }
-
-                return;
               }
+
               var data = JSON.parse(body);
               firstline = data.html;
               thumbnail = maximg(data.thumbnail_url);
-              resolve();
+
+              var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+              if (newurl) {
+                newurl = newurl[1];
+                do_firstline(newurl).then(
+                  () => {
+                    if (!item.deleted && !item["private"])
+                      firstline = data.html;
+                    resolve();
+                  },
+                  () => {
+                    firstline = data.html;
+                    thumbnail = maximg(data.thumbnail_url);
+                    resolve();
+                  }
+                );
+              } else {
+                console.log("Can't find non-instagram URL");
+                resolve();
+              }
             });
           });
         } else if (url.match(/twitter\.com\//)) {
@@ -1147,14 +1152,37 @@ function update_blogger_main(filename, splitted) {
                   }
                 );
               } else {
-                console.log("Can't find non-twitter URL");
-                reject();
+                console.log("Can't find non-twitter URL, must be a text post");
+                firstline = data.html;
+                thumbnail = null;
+                resolve();
               }
             });
           });
         } else {
           console.log("Unknown url: " + url);
-          return null;
+          item["private"] = true;
+
+          return new Promise((resolve, reject) => {
+            var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+            if (newurl) {
+              newurl = newurl[1];
+              do_firstline(newurl).then(
+                () => {
+                  firstline = "";
+                  resolve();
+                },
+                () => {
+                  reject();
+                }
+              );
+            } else {
+              console.log("Can't find any usable URL");
+              firstline = null;
+              thumbnail = null;
+              reject();
+            }
+          });
         }
       }
 
@@ -1174,12 +1202,13 @@ function update_blogger_main(filename, splitted) {
       promise.then(() => {
         var contents = markdown_to_html(contents_md);
         var viatext;
-        if (item.site === "instagram")
+        /*if (item.site === "instagram")
           viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.username + "/' target='_blank'>" + item.username + "</a> on instagram)</em></p><br />\n";
         else if (item.site === "twitter")
           viatext = "\n<p><em>(via <a href='https://www.twitter.com/" + item.username + "' target='_blank'>@" + item.username + "</a> on twitter)</em></p><br />\n";
         else if (item.site === "weibo")
-          viatext = "\n<p><em>(via <a href='https://www.weibo.com/" + item.username + "' target='_blank'>" + item.username + "</a> on weibo)</em></p><br />\n";
+        viatext = "\n<p><em>(via <a href='https://www.weibo.com/" + item.username + "' target='_blank'>" + item.username + "</a> on weibo)</em></p><br />\n";*/
+        viatext = "\n<p><em>(via <a href='" + item.member[item.site + "_obj"].link + "' target='_blank'>" + item.username + "</a> on " + item.site + ")</em></p><br />\n";
         contents = firstline + viatext + contents;
 
         if (item.deleted || item["private"]) {
@@ -1605,6 +1634,20 @@ function do_tweets(tweets) {
   do_tweet(0, null);
 }
 
+function get_settings() {
+  var settings = JSON.parse(JSON.stringify(parse_feeds.feeds_toml.general));
+  for (var i = 0; i < arguments.length; i++) {
+    if (arguments[i] in parse_feeds.feeds_toml) {
+      var top = parse_feeds.feeds_toml[arguments[i]];
+      for (var setting in top) {
+        settings[setting] = JSON.parse(JSON.stringify(top[setting]));
+      }
+    }
+  }
+
+  return settings;
+}
+
 function update_reddit(filename) {
   var contents = fs.readFileSync(filename).toString('utf8');
   var splitted = contents.split("\n");
@@ -1614,10 +1657,18 @@ function update_reddit(filename) {
   var group_hangul = fn_split[0];
   var groupname = parse_feeds.parse_hangul_first(group_hangul);
 
-  var namespace = parse_feeds.feeds_toml.general;
+  /*var namespace = parse_feeds.feeds_toml.general;
   if (group_hangul in parse_feeds.feeds_toml) {
     namespace = parse_feeds.feeds_toml[group_hangul];
+    }*/
+  var reddit = parse_feeds.feeds_toml.reddit[group_hangul];
+  if (!reddit) {
+    console.log("No reddit configured for " + group_hangul);
+    return;
   }
+  console.log ("/r/" + reddit);
+
+  var namespace = get_settings(group_hangul, "reddit/" + reddit);
 
   var start = fn_split[1];
   var end = fn_split[2].replace(/[^0-9]*/g, "");
@@ -1777,30 +1828,45 @@ function update_reddit(filename) {
     }
   }
 
-  var site = " SNS ";
+  var site = "SNS";
   if (instagram_count > 0 &&
       twitter_count === 0 &&
       weibo_count === 0) {
-    site = " Instagram ";
+    site = "Instagram";
+    if (namespace.instagram_nick)
+      site = namespace.instagram_nick;
   } else if (instagram_count === 0 &&
              twitter_count > 0 &&
              weibo_count === 0) {
-    site = " Twitter ";
+    site = "Twitter";
+    if (namespace.twitter_nick)
+      site = namespace.twitter_nick;
   } else if (instagram_count === 0 &&
              twitter_count === 0 &&
              weibo_count > 0) {
-    site = " Weibo ";
+    site = "Weibo";
+    if (namespace.weibo_nick)
+      site = namespace.weibo_nick;
   }
 
-  var title = prefix + site + updates + " [" + timestr + "]";
+  var format = "%M %S %U [%T]";
+  if (namespace.format)
+    format = namespace.format;
+
+  var title = format
+      .replace(/%M/, prefix)
+      .replace(/%m/, prefix.toLowerCase())
+      .replace(/%S/, site)
+      .replace(/%s/, site.toLowerCase())
+      .replace(/%U/, updates)
+      .replace(/%u/, updates.toLowerCase())
+      .replace(/%T/, timestr)
+      .replace(/%%/, "%");
+
+  //var title = prefix + site + updates + " [" + timestr + "]";
   console.log(title);
 
-  var reddit = parse_feeds.feeds_toml.reddit[group_hangul];
-  if (!reddit) {
-    console.log("No reddit configured for " + group_hangul);
-    return;
-  }
-  console.log ("/r/" + reddit);
+  //return;
 
   var key = parse_feeds.feeds_toml.general.encrypt_key;
   var encryptor = require('simple-encryptor')(key);
@@ -2396,6 +2462,7 @@ function main() {
 
             weibo_username_names[userid] = parse_name_from_title(members[i].title, group).toLowerCase();
             weibo_username_names[member_username] = weibo_username_names[userid];
+            weibo_userids_to_usernames[userid] = member_username;
           }
         }
       }
@@ -2540,6 +2607,9 @@ function main() {
           mlinks[nick].push(get_home_from_rssit_url(member_url));
           var mmember = mcontent[member_url];
           var member_username = get_username_from_rssit_url(mmember[0].url);
+          var member_userid = member_username;
+          if (subfolder === "weibo")
+            member_username = weibo_userids_to_usernames[member_userid];
           var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, subfolder, member_username));
           var items = fs.readdirSync(dl_path);
           items = items.sort(naturalSort);

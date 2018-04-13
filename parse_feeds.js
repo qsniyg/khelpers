@@ -337,7 +337,7 @@ function get_name(text, member) {
     if (!member[site + "_username"])
       return;
 
-    var username = member[site + "_username"];
+    var username = member[site + "_username"].toLowerCase();
     var key = site + "/@" + username;
     if (key in feeds_toml) {
       var newalt = feeds_toml[key];
