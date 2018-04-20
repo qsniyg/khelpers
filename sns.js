@@ -304,9 +304,9 @@ function get_home_from_rssit_url(url) {
   if (url.indexOf("/instagram/") >= 0)
     return "https://www.instagram.com/" + get_username_from_rssit_url(url) + "/";
   else if (url.indexOf("/twitter/") >= 0)
-    return "https://www.twitter.com/" + get_username_from_rssit_url(url);
+    return "https://twitter.com/" + get_username_from_rssit_url(url);
   else if (url.indexOf("/weibo/u/") >= 0)
-    return "https://www.weibo.com/u/" + get_username_from_rssit_url(url);
+    return "http://weibo.com/u/" + get_username_from_rssit_url(url);
 }
 
 // https://stackoverflow.com/a/28149561
@@ -885,7 +885,7 @@ function parse_txt(filename, splitted) {
 
       //var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
       //if (username.toLowerCase() === newusername.toLowerCase()) {
-      if (newusernames.indexOf(username.toLowerCase())) {
+      if (newusernames.indexOf(username.toLowerCase()) >= 0) {
         member = group_members[x];
         break;
       }
@@ -1821,7 +1821,7 @@ function update_reddit(filename) {
       forcegroup = true;
 
     for (var j = 0; j < current_links.length; j++) {
-      if (usernames.indexOf(current_links[j]) >= 0)
+      if (current_links[j] in usernames)
         users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
     }
     /*if (instagram_username in usernames ||
@@ -2577,6 +2577,54 @@ function main() {
           return;
         }
 
+        var inword = false;
+        var hanword = false;
+        var words = 0;
+        var hanwords = 0;
+        var chars = 0;
+        var hanchars = 0;
+
+        for (var i = 0; i < content.length; i++) {
+          var cereal = cheerio.load(content[i].content);
+          var text = cheerio(cereal("p")[0]).text();
+          for (var j = 0; j < text.length; j++) {
+            if (text[j].match(/\s|[\]-~!@#$%^&*()_=`+{}\\|,.<>/?;:'"]/)) {
+              if (inword) {
+                inword = false;
+
+                if (hanword)
+                  hanwords++;
+                hanword = false;
+
+                words++;
+              }
+              continue;
+            }
+
+            inword = true;
+            chars++;
+
+            if (parse_feeds.is_hangul(text.charCodeAt(j))) {
+              hanchars++;
+              hanword = true;
+            }
+          }
+
+          if (inword) {
+            words++;
+            if (hanword)
+              hanwords++;
+
+            inword = false;
+            hanword = false;
+          }
+        }
+
+        console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ")");
+        if (!readlineSync.keyInYNStrict("Do you wish to continue?")) {
+          return;
+        }
+
         var mcontent = {};
         for (var i = 0; i < content.length; i++) {
           if ((content[i].created_at < startdate.getTime() ||
@@ -2632,15 +2680,15 @@ function main() {
         var promises = [];
         var promises_done = 0;
         for (var member_url in mcontent) {
-          var nick;
-          var subfolder;
+          var nick = undefined;
+          var subfolder = undefined;
           for (var x = 0; x < group_members.length; x++) {
             group_members[x].accounts.forEach((account) => {
               if (nick)
                 return;
 
-              if (account.url === member_url) {
-                nick = link_names[account.url];
+              if (account.link === get_home_from_rssit_url(member_url)) {
+                nick = link_names[account.link];
               }
             });
 
