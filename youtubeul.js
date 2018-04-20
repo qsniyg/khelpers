@@ -6,6 +6,11 @@ var parse_feeds = require('./parse_feeds');
 var fs = require('fs');
 const notifier = require('node-notifier');
 var DMClient = require('dailymotion-sdk').client;
+var moment = require('moment-timezone');
+
+var tz_offset = 9; // KST
+var tz_name = "Asia/Seoul";
+moment.tz.setDefault(tz_name);
 
 
 var scopes = [
@@ -192,7 +197,15 @@ function upload_video(options) {
   upload_video_yt(options);
 }
 
+function do_timestamp(ts) {
+  return parse_feeds.pad(ts.year().toString().slice(2), 2) +
+    parse_feeds.pad((ts.month() + 1).toString(), 2) +
+    parse_feeds.pad((ts.date()).toString(), 2);
+}
+
 function create_timestamp(date) {
+  return do_timestamp(moment(date));
+
   var timestamp_year = pad(date.getFullYear()-2000, 2);
   var timestamp_month = pad(date.getMonth() + 1, 2);
   var timestamp_day = pad(date.getDate(), 2);
@@ -237,6 +250,7 @@ function main() {
   var timestamp_month = pad(date.getMonth() + 1, 2);
   var timestamp_day = pad(date.getDate(), 2);
   var timestamp = timestamp_year + timestamp_month + timestamp_day;
+  timestamp = create_timestamp(date);
   var endtitle = " [" + timestamp + "]";
 
   var description = "Instagram: https://www.instagram.com/" + username_str + "/";
@@ -248,12 +262,18 @@ function main() {
         continue;
 
       var member_url;
-      if (member.instagram_obj)
+      var member_usernames = [];
+
+      /*if (member.instagram_obj)
         member_url = member.instagram_obj.url;
       else if (member.obj)
-        member_url = member.obj.url;
+      member_url = member.obj.url;*/
+      member.accounts.forEach((account) => {
+        member_usernames.push(account.username.toLowerCase());
+      });
 
-      if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
+      //if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
+      if (member_usernames.indexOf(username_str.toLowerCase()) >= 0) {
         console.log(member);
 
         var name = "";

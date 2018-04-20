@@ -138,13 +138,26 @@ function find_members_by_group(members, group) {
     if (!member)
       continue;
 
-    if (member.instagram_obj && ignore_instagram.indexOf(get_username_from_rssit_url(member.instagram_obj.url)) >= 0)
+    /*if (member.instagram_obj && ignore_instagram.indexOf(get_username_from_rssit_url(member.instagram_obj.url)) >= 0)
       continue;
 
     if (member.twitter_obj && ignore_twitter.indexOf(get_username_from_rssit_url(member.twitter_obj.url)) >= 0)
       continue;
 
     if (member.weibo_obj && ignore_weibo.indexOf(get_username_from_rssit_url(member.weibo_obj.url)) >= 0)
+    continue;*/
+    var ignore = false;
+    for (var j = 0; j < member.accounts.length; j++) {
+      var username = member.accounts[j].username.toLowerCase();
+      if ((member.accounts[j].site === "instagram" && ignore_instagram.indexOf(username) >= 0) ||
+          (member.accounts[j].site === "twitter" && ignore_twitter.indexOf(username) >= 0) ||
+          (member.accounts[j].site === "weibo" && ignore_weibo.indexOf(username) >= 0)) {
+        ignore = true;
+        break;
+      }
+    }
+
+    if (ignore)
       continue;
 
     if (member.alt !== group &&
@@ -184,6 +197,7 @@ function get_instagram_rssit_url(url) {
 var instagram_username_names = {};
 var twitter_username_names = {};
 var weibo_username_names = {};
+var link_names = {};
 
 function comment_to_text(comment) {
   var text = "-\n\n[@" + escape_text(comment.owner.username) + "](https://www.instagram.com/" + comment.owner.username + "/)";
@@ -857,16 +871,21 @@ function parse_txt(filename, splitted) {
 
     var member = null;
     for (var x = 0; x < group_members.length; x++) {
-      var newusername;
-      if (group_members[x].instagram_obj && usersite === "instagram")
+      var newusernames = [];
+      group_members[x].accounts.forEach((account) => {
+        if (account.site === usersite)
+          newusernames.push(account.username.toLowerCase());
+      });
+      /*if (group_members[x].instagram_obj && usersite === "instagram")
         newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
       if (group_members[x].twitter_obj && usersite === "twitter")
         newusername = get_username_from_rssit_url(group_members[x].twitter_obj.url);
       if (group_members[x].weibo_obj && usersite === "weibo")
-        newusername = get_username_from_rssit_url(group_members[x].weibo_obj.url);
+        newusername = get_username_from_rssit_url(group_members[x].weibo_obj.url);*/
 
       //var newusername = get_username_from_rssit_url(group_members[x].instagram_obj.url);
-      if (username.toLowerCase() === newusername.toLowerCase()) {
+      //if (username.toLowerCase() === newusername.toLowerCase()) {
+      if (newusernames.indexOf(username.toLowerCase())) {
         member = group_members[x];
         break;
       }
@@ -1095,17 +1114,17 @@ function update_blogger_main(filename, splitted) {
                 return;
               }
 
-              if (body === "No Media Match") {
+              if (trim_text(body) === "No Media Match") {
                 if (shortcode.length < 20) {
                   item.deleted = true;
                 } else {
                   item["private"] = true;
                 }
+              } else {
+                var data = JSON.parse(body);
+                firstline = data.html;
+                thumbnail = maximg(data.thumbnail_url);
               }
-
-              var data = JSON.parse(body);
-              firstline = data.html;
-              thumbnail = maximg(data.thumbnail_url);
 
               var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
               if (newurl) {
@@ -1201,14 +1220,16 @@ function update_blogger_main(filename, splitted) {
 
       promise.then(() => {
         var contents = markdown_to_html(contents_md);
-        var viatext;
+        var viatext = "";
         /*if (item.site === "instagram")
           viatext = "\n<p><em>(via <a href='https://www.instagram.com/" + item.username + "/' target='_blank'>" + item.username + "</a> on instagram)</em></p><br />\n";
         else if (item.site === "twitter")
           viatext = "\n<p><em>(via <a href='https://www.twitter.com/" + item.username + "' target='_blank'>@" + item.username + "</a> on twitter)</em></p><br />\n";
         else if (item.site === "weibo")
         viatext = "\n<p><em>(via <a href='https://www.weibo.com/" + item.username + "' target='_blank'>" + item.username + "</a> on weibo)</em></p><br />\n";*/
-        viatext = "\n<p><em>(via <a href='" + item.member[item.site + "_obj"].link + "' target='_blank'>" + item.username + "</a> on " + item.site + ")</em></p><br />\n";
+
+        // don't use viatext for now
+        //viatext = "\n<p><em>(via <a href='" + item.member[item.site + "_obj"].link + "' target='_blank'>" + item.username + "</a> on " + item.site + ")</em></p><br />\n";
         contents = firstline + viatext + contents;
 
         if (item.deleted || item["private"]) {
@@ -1745,7 +1766,7 @@ function update_reddit(filename) {
       // family
       hasfamily = true;
     } else {
-      usernames[splitted[i].replace(/.*\(http.*?\/([^/]*)\/\).*/, "$1")] = true;
+      usernames[splitted[i].replace(/.*\((http.*?)\).*/, "$1")] = true;
     }
   }
 
@@ -1784,20 +1805,29 @@ function update_reddit(filename) {
 
   var group_members = find_members_by_group(parse_feeds.members, group_hangul);
   for (var i = 0; i < group_members.length; i++) {
-    var instagram_username, twitter_username, weibo_username;
+    /*var instagram_username, twitter_username, weibo_username;
     if (group_members[i].instagram_obj)
       instagram_username = get_username_from_rssit_url(group_members[i].instagram_obj.url);
     if (group_members[i].twitter_obj)
       twitter_username = get_username_from_rssit_url(group_members[i].twitter_obj.url);
     if (group_members[i].weibo_obj)
-      weibo_username = get_username_from_rssit_url(group_members[i].weibo_obj.url);
+    weibo_username = get_username_from_rssit_url(group_members[i].weibo_obj.url);*/
+    var current_links = [];
+    group_members[i].accounts.forEach((account) => {
+      current_links.push(account.link);
+    });
 
     if (group_members[i].nicks[0].hangul === group_hangul)
       forcegroup = true;
-    if (instagram_username in usernames ||
+
+    for (var j = 0; j < current_links.length; j++) {
+      if (usernames.indexOf(current_links[j]) >= 0)
+        users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
+    }
+    /*if (instagram_username in usernames ||
         twitter_username in usernames ||
         weibo_username in usernames)
-      users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
+      users[parse_name_from_title(group_members[i].title, group_hangul)] = true;*/
   }
 
   var prefix = groupname;
@@ -2422,9 +2452,39 @@ function main() {
           continue;
 
         var url;
-        var member_username;
+        //var member_username;
 
-        if (members[i].instagram_obj) {
+        members[i].accounts.forEach((account) => {
+          var title;
+          if (members[i].nicks) {
+            title = parse_name_from_title(members[i].title, group).toLowerCase();
+            link_names[account.link] = title;
+          }
+
+          if (account.site === "instagram") {
+            important_instagram_usernames.push(account.username);
+
+            if (title)
+              instagram_username_names[account.username] = title;
+          } else if (account.site === "twitter") {
+            important_twitter_usernames.push(account.username);
+
+            if (title)
+              twitter_username_names[account.username] = title;
+          } else if (account.site === "weibo") {
+            var userid = get_username_from_rssit_url(account.link);
+            important_weibo_usernames.push(account.username);
+
+            if (title) {
+              weibo_username_names[userid] = title;
+              weibo_username_names[account.username] = weibo_username_names[userid];
+            }
+
+            weibo_userids_to_usernames[userid] = account.username;
+          }
+        });
+
+        /*if (members[i].instagram_obj) {
           url = members[i].instagram_obj.url;
           if (url.indexOf("/instagram/") >= 0) {
             member_username = get_username_from_rssit_url(url);
@@ -2464,7 +2524,7 @@ function main() {
             weibo_username_names[member_username] = weibo_username_names[userid];
             weibo_userids_to_usernames[userid] = member_username;
           }
-        }
+        }*/
       }
 
       var group_members = find_members_by_group(members, group);
@@ -2476,12 +2536,15 @@ function main() {
 
       var urls = [];
       for (var i = 0; i < group_members.length; i++) {
-        if (group_members[i].instagram_obj)
+        /*if (group_members[i].instagram_obj)
           urls.push(group_members[i].instagram_obj.url);
         if (group_members[i].twitter_obj)
           urls.push(group_members[i].twitter_obj.url);
         if (group_members[i].weibo_obj)
-          urls.push(group_members[i].weibo_obj.url);
+        urls.push(group_members[i].weibo_obj.url);*/
+        group_members[i].accounts.forEach((account) => {
+          urls.push(account.obj.url);
+        });
       }
 
       var starttime = 9007199254740991;
@@ -2572,7 +2635,16 @@ function main() {
           var nick;
           var subfolder;
           for (var x = 0; x < group_members.length; x++) {
-            if (group_members[x].instagram_obj) {
+            group_members[x].accounts.forEach((account) => {
+              if (nick)
+                return;
+
+              if (account.url === member_url) {
+                nick = link_names[account.url];
+              }
+            });
+
+            /*if (group_members[x].instagram_obj) {
               if (group_members[x].instagram_obj.url === member_url) {
                 //nick = group_members[x].nicks[0].roman_first;
                 nick = instagram_username_names[get_username_from_rssit_url(member_url)];
@@ -2589,7 +2661,7 @@ function main() {
               if (group_members[x].weibo_obj.url === member_url) {
                 nick = weibo_username_names[get_username_from_rssit_url(member_url)];
               }
-            }
+            }*/
           }
 
           if (member_url.indexOf("/instagram/") >= 0)
@@ -2628,7 +2700,7 @@ function main() {
 
             if (subfolder === "twitter" &&
                 text.match(/https?:\/\/www\.instagram\.com\/p\/[^ ]* *$/))
-              return;
+              continue;
 
             if (trim_text(text) === "(n/a)") {
               entry.empty = true;
@@ -2867,6 +2939,7 @@ function main() {
         }
 
         Promise.all(promises).then(() => {
+          console.log("Writing...");
           if (mentries.length === 0) {
             console.log("Nothing to do");
             return;
@@ -2917,6 +2990,7 @@ function main() {
             }
           }
           fs.writeFileSync(filename, sorted_text);
+          console.log("File written");
           var editor = parse_feeds.feeds_toml.general.editor;
           var editorargs = editor.slice(1);
           editorargs.push(filename);
