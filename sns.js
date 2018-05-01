@@ -2472,15 +2472,18 @@ function main() {
             if (title)
               twitter_username_names[account.username] = title;
           } else if (account.site === "weibo") {
-            var userid = get_username_from_rssit_url(account.link);
-            important_weibo_usernames.push(account.username);
+            //var userid = get_username_from_rssit_url(account.link);
+            var userid = account.username;
+            var username = account.obj.title;
+            //important_weibo_usernames.push(account.username);
+            important_weibo_usernames.push(userid);
 
             if (title) {
               weibo_username_names[userid] = title;
-              weibo_username_names[account.username] = weibo_username_names[userid];
+              weibo_username_names[username] = weibo_username_names[userid];
             }
 
-            weibo_userids_to_usernames[userid] = account.username;
+            weibo_userids_to_usernames[userid] = username;
           }
         });
 

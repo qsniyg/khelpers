@@ -261,6 +261,21 @@ function has_hangul(text, k_counted) {
 }
 module.exports.has_hangul = has_hangul;
 
+function is_mixed(text) {
+  return (
+    !!text.match(/[0-9]/) ||
+      (has_hangul(text, true) && text.match(/[a-zA-Z]/))
+  );
+}
+
+function get_last_firstname(text) {
+  if (text.indexOf(" ") < 0) {
+    return [text[0], text.slice(1)];
+  } else {
+    return [text.split(" ")[0], text.replace(/^[^ ]* +/, "")];
+  }
+}
+
 function parse_name(text, obj) {
   var roman = get_user_roman(text, obj);
   if (roman)
@@ -269,7 +284,20 @@ function parse_name(text, obj) {
   if (!is_hangul(text.charCodeAt(0)))
     return parse_hangul(text, false, obj);
 
-  var lastname = parse_hangul(text[0], false, obj);
+  var lastname;
+  var rest;
+
+  var lastfirst = get_last_firstname(text);
+  lastname = parse_hangul(lastfirst[0], false, obj);
+  rest = lastfirst[1];
+  /*if (text.indexOf(" ") < 0) {
+    lastname = parse_hangul(text[0], false, obj);
+    rest = text.slice(1);
+  } else {
+    lastname = parse_hangul(text.split(" ")[0], false, obj);
+    rest = text.replace(/^[^ ]* +/, "");
+  }*/
+
   if (text[0] === "김") {
     lastname = "Kim";
   } else if (text[0] === "이") {
@@ -298,8 +326,10 @@ function parse_name(text, obj) {
     lastname = "Ki";
   } else if (text[0] === "안") {
     lastname = "Ahn";
+  } else if (text[0] === "간") {
+    lastname = "Kan";
   }
-  var retval = lastname + " " + parse_hangul(text.slice(1), false, obj);
+  var retval = lastname + " " + parse_hangul(rest, false, obj);
   //console.log(text);
   //console.log(retval);
   return retval;
@@ -439,7 +469,7 @@ function get_name(text, member) {
   } else {
     var splitted = text.split("/");
     splitted.forEach((x) => {
-      if (x.length > 2 && is_hangul(x.charCodeAt(0)) && get_user_nick(x) !== false) {
+      if (x.length > 2 && !is_mixed(x) && get_user_nick(x) !== false) {
         /*var splitted = x.split("/");
         splitted.forEach((x) => {
           ret.names.push(parse_name_obj(x, alt));
@@ -448,7 +478,8 @@ function get_name(text, member) {
         //ret.names.push(parse_name_obj(x, alt));
         upush(ret.names, parse_name_obj(x, alt));
         //ret.nicks.push(parse_hangul_obj(x.slice(1), false, alt));
-        upush(ret.nicks, parse_hangul_obj(x.slice(1), false, alt));
+        //upush(ret.nicks, parse_hangul_obj(x.slice(1), false, alt));
+        upush(ret.nicks, parse_hangul_obj(get_last_firstname(x)[1], false, alt));
       } else {
         //ret.nicks.push(parse_hangul_obj(x, false, alt));
         upush(ret.nicks, parse_hangul_obj(x, false, alt));
@@ -519,6 +550,8 @@ function parse_member(obj, options) {
   var member_comment = strip(member.alt.replace(/.*# */, ""));
   if (member_comment !== strip(member.alt))
     member.comment = member_comment;
+  else
+    member.comment = "";
 
   var username = get_username_from_rssit_url(obj.url);
   if (username && username != obj.url) {
@@ -577,7 +610,7 @@ function parse_member(obj, options) {
       upush(member.tags, "ex");
     }
 
-    if (options.group) {
+    if (member.group) {
       upush(member.tags, "멤버");
       upush(member.tags, "member");
 
