@@ -328,11 +328,26 @@ function parse_name(text, obj) {
     lastname = "Ahn";
   } else if (text[0] === "간") {
     lastname = "Kan";
+  } else if (text[0] === "류") {
+    lastname = "Ryu";
   }
-  var retval = lastname + " " + parse_hangul(rest, false, obj);
+
+  var nameval = parse_hangul(rest, false, obj);
+  if (nameval instanceof Array) {
+    var retval = [];
+
+    nameval.forEach((firstname) => {
+      retval.push(lastname + " " + firstname);
+    });
+
+    return retval;
+  } else {
+    return lastname + " " + nameval;
+  }
+  //var retval = lastname + " " + parse_hangul(rest, false, obj);
   //console.log(text);
   //console.log(retval);
-  return retval;
+  //return retval;
 }
 module.exports.parse_name = parse_name;
 
@@ -640,6 +655,7 @@ function parse_member(obj, options) {
     for (var i = 0; i < member.names.length; i++) {
       if (member.names[i].roman_first && member.names[i].roman_first.match(/[a-zA-Z]/)) {
         member.names_roman_first = member.names[i].roman_first;
+        break;
       }
     }
   }
@@ -653,6 +669,7 @@ function parse_member(obj, options) {
     for (var i = 0; i < member.nicks.length; i++) {
       if (member.nicks[i].roman_first && member.nicks[i].roman_first.match(/[a-zA-Z]/)) {
         member.nicks_roman_first = member.nicks[i].roman_first;
+        break;
       }
     }
   }

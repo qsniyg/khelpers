@@ -7,6 +7,7 @@ var fs = require('fs');
 const notifier = require('node-notifier');
 var DMClient = require('dailymotion-sdk').client;
 var moment = require('moment-timezone');
+var path = require('path');
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -151,6 +152,9 @@ function upload_video_yt(options) {
       },
       media: {
         body: fs.createReadStream(options.file)
+      },
+      headers: {
+        Slug: path.basename(options.file)
       }
     }, function (err, data) {
       if (err) {
@@ -194,7 +198,14 @@ function upload_video_yt(options) {
 }
 
 function upload_video(options) {
-  upload_video_yt(options);
+  try {
+    upload_video_yt(options);
+  } catch (err) {
+    notifier.notify({
+      title: "[YT] Live error",
+      message: 'Error uploading live: ' + options.title + ' to youtube\nProgram error: ' + err
+    });
+  }
 }
 
 function do_timestamp(ts) {

@@ -222,7 +222,8 @@ function unescape_text(text) {
     .replace(/\\~/g, "~")
     .replace(/\\\*/g, "*")
     .replace(/\\\./g, ".")
-    .replace(/\\\^/g, "^");
+    .replace(/\\\^/g, "^")
+    .replace(/\\\[/g, "[");
 }
 
 function markdown_to_text(text) {
@@ -268,20 +269,84 @@ function markdown_to_html(text) {
     .replace(/<p> *- *<\/p>/g, "<br />");
 }
 
-function escape_text(text) {
-  var newtext = text
+var markdown_control = {
+  "#": "\\#",
+  "_": "\\_",
+  "~": "\\~",
+  "*": "\\*",
+  ".": "\\.",
+  "^": "\\^"
+};
+
+var special_markdown_control = {
+  "\\": "\\\\",
+  "[": "\\["
+};
+
+function escape_text(text, redo) {
+  if (redo === undefined)
+    redo = true;
+
+  var newtext = "";
+  var in_link = false;
+  var linkpart = 0;
+  var escape = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+
+    if (ch in special_markdown_control) {
+      if (redo) {
+        newtext += "\\";
+      } else if (!escape) {
+        if (ch === "\\")
+          escape = true;
+        else if (ch === "[")
+          linkpart = 1;
+      }
+    }
+
+    if (escape || in_link || linkpart >= 2) {
+    } else {
+      if (ch in markdown_control) {
+        newtext += "\\";
+      }
+    }
+
+    if (!escape && !redo && linkpart >= 1) {
+      if (linkpart === 1 && ch === "]")
+        linkpart++;
+      if (linkpart === 2 && ch === "(")
+        linkpart++;
+      if (linkpart === 3 && ch === ")")
+        linkpart = 0;
+    }
+
+    if (newtext.match(/https?:\/\/$/))
+      in_link = true;
+
+    if (ch !== "\\")
+      escape = false;
+
+    newtext += ch;
+  }
+
+  /*var newtext = text
       .replace(/\\/g, "\\\\")
       .replace(/#/g, "\\#")
       .replace(/_/g, "\\_")
       .replace(/~/g, "\\~")
-      .replace(/\*/g, "\\*")
+      .replace(/\*\/g, "\\*") // fixwhen uncommenting
       .replace(/\./g, "\\.")
-      .replace(/\^/g, "\\^");
+      .replace(/\^/g, "\\^");*/
   var splitted = newtext.split(" ");
   var newsplitted = [];
   splitted.forEach((split) => {
     if (split[0] === "@") {
-      newsplitted.push("[" + split + "](https://www.instagram.com/" + unescape_text(split.substr(1)) + "/)");
+      // https://stackoverflow.com/a/17087528
+      // [a-zA-Z0-9_.]
+      var split_username = split.replace(/^@([a-zA-Z0-9_.]+).*?$/, "$1");
+      var split_rest = split.replace(/^@[a-zA-Z0-9_.]+(.*?)$/, "$1");
+      newsplitted.push("[@" + split_username + "](https://www.instagram.com/" + unescape_text(split_username) + "/)" + split_rest);
     } else {
       newsplitted.push(split);
     }
@@ -713,7 +778,7 @@ function parse_txt(filename, splitted) {
     if (member.alt !== group_hangul)
       return;
     member.names.forEach((name) => {
-      group_alts.push(name.roman.toLowerCase());
+      group_alts.push(name.roman_first.toLowerCase());
     });
   });
 
@@ -860,6 +925,8 @@ function parse_txt(filename, splitted) {
     var userurl = current_user.replace(/.*\((http[^)]*)\).*/, "$1");
     var usersite = userurl.replace(/^https?:\/\/(?:[a-z]*\.)?([^/.]*)\..*/, "$1");
     var username = userurl.replace(/.*\.com\/([^/]*).*?$/, "$1");
+    if (usersite === "weibo" && username === "u")
+      username = userurl.replace(/.*\.com\/u\/([^/]*).*?$/, "$1");
     if (user.match(/\(.*'s/)) {
       // family member
       usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
@@ -1156,14 +1223,20 @@ function update_blogger_main(filename, splitted) {
                 return;
               }
 
-              var data = JSON.parse(body);
+              if (response.statusCode === 404) {
+                item.deleted = true;
+              } else {
+                var data = JSON.parse(body);
+                firstline = data.html;
+              }
 
               var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
               if (newurl) {
                 newurl = newurl[1];
                 do_firstline(newurl).then(
                   () => {
-                    firstline = data.html;
+                    if (!item.deleted)
+                      firstline = data.html;
                     resolve();
                   },
                   () => {
@@ -1172,7 +1245,7 @@ function update_blogger_main(filename, splitted) {
                 );
               } else {
                 console.log("Can't find non-twitter URL, must be a text post");
-                firstline = data.html;
+                //firstline = data.html;
                 thumbnail = null;
                 resolve();
               }
@@ -1817,12 +1890,14 @@ function update_reddit(filename) {
       current_links.push(account.link);
     });
 
-    if (group_members[i].nicks[0].hangul === group_hangul)
-      forcegroup = true;
-
     for (var j = 0; j < current_links.length; j++) {
-      if (current_links[j] in usernames)
+      if (current_links[j] in usernames) {
         users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
+
+        if (group_members[i].nicks[0].hangul === group_hangul) {
+          forcegroup = true;
+        }
+      }
     }
     /*if (instagram_username in usernames ||
         twitter_username in usernames ||
@@ -1831,7 +1906,12 @@ function update_reddit(filename) {
   }
 
   var prefix = groupname;
-  if (Object.keys(users).length <= 3 && !forcegroup) {
+
+  var group_thresh = 3;
+  if (namespace.group_thresh)
+    group_thresh = namespace.group_thresh;
+
+  if (Object.keys(users).length <= group_thresh && !forcegroup) {
     var userarr = [];
     for (var user in users) {
       userarr.push(user);
@@ -1858,7 +1938,10 @@ function update_reddit(filename) {
     }
   }
 
-  var site = "SNS";
+  var site = "";
+  if (namespace.sns_nick)
+    site = namespace.sns_nick;
+
   if (instagram_count > 0 &&
       twitter_count === 0 &&
       weibo_count === 0) {
@@ -1879,7 +1962,10 @@ function update_reddit(filename) {
       site = namespace.weibo_nick;
   }
 
-  var format = "%M %S %U [%T]";
+  if (site !== "")
+    site = site + " ";
+
+  var format = "%M %S%U [%T]";
   if (namespace.format)
     format = namespace.format;
 
@@ -2573,12 +2659,43 @@ function main() {
       }, {sort: {created_at: -1}}).then((content) => {
         //console.dir(content);
         parse_feeds.db.close();
-        console.log(content.length);
+        //console.log(content.length);
 
         if (content.length === 0) {
           console.log("No content");
           return;
         }
+
+        var mcontent = {};
+        var newcontent = [];
+        for (var i = 0; i < content.length; i++) {
+          if ((content[i].created_at < startdate.getTime() ||
+               content[i].created_at > enddate.getTime()) &&
+              content[i].title.indexOf("[DP] ") < 0) {
+            continue;
+          }
+
+          if (!(content[i].url in mcontent))
+            mcontent[content[i].url] = [];
+
+          newcontent.push(content[i]);
+          mcontent[content[i].url].push(content[i]);
+
+          var created = content[i].created_at;
+          if (content[i].title.indexOf("[DP] ") >= 0) {
+            created = content[i].added_at;
+          }
+
+          if (created < starttime) {
+            starttime = created;
+          }
+
+          if (created > endtime) {
+            endtime = created;
+          }
+        }
+
+        console.log(newcontent.length);
 
         var inword = false;
         var hanword = false;
@@ -2587,8 +2704,8 @@ function main() {
         var chars = 0;
         var hanchars = 0;
 
-        for (var i = 0; i < content.length; i++) {
-          var cereal = cheerio.load(content[i].content);
+        for (var i = 0; i < newcontent.length; i++) {
+          var cereal = cheerio.load(newcontent[i].content);
           var text = cheerio(cereal("p")[0]).text();
           for (var j = 0; j < text.length; j++) {
             if (text[j].match(/\s|[\]-~!@#$%^&*()_=`+{}\\|,.<>/?;:'"]/)) {
@@ -2626,33 +2743,6 @@ function main() {
         console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ")");
         if (!readlineSync.keyInYNStrict("Do you wish to continue?")) {
           return;
-        }
-
-        var mcontent = {};
-        for (var i = 0; i < content.length; i++) {
-          if ((content[i].created_at < startdate.getTime() ||
-               content[i].created_at > enddate.getTime()) &&
-              content[i].title.indexOf("[DP] ") < 0) {
-            continue;
-          }
-
-          if (!(content[i].url in mcontent))
-            mcontent[content[i].url] = [];
-
-          mcontent[content[i].url].push(content[i]);
-
-          var created = content[i].created_at;
-          if (content[i].title.indexOf("[DP] ") >= 0) {
-            created = content[i].added_at;
-          }
-
-          if (created < starttime) {
-            starttime = created;
-          }
-
-          if (created > endtime) {
-            endtime = created;
-          }
         }
 
         var new_timestamp = do_timestamp(moment(starttime));
@@ -2733,6 +2823,9 @@ function main() {
           var member_userid = member_username;
           if (subfolder === "weibo")
             member_username = weibo_userids_to_usernames[member_userid];
+          var folder_username = member_username;
+          if (subfolder === "instagram")
+            folder_username = member_username.toLowerCase();
           var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, subfolder, member_username));
           var items = fs.readdirSync(dl_path);
           items = items.sort(naturalSort);
@@ -2797,6 +2890,7 @@ function main() {
 
             if (has_nonblank) {
               entry.content = newlines.join("\n>\n");
+              //console.log(entry.content);
             }
 
             var entrytext = entry.url;
