@@ -118,6 +118,15 @@ function get_user_roman(text, obj) {
   return null;
 }
 
+function get_comment_roman(text, comment) {
+  var key = text + "#" + comment;
+  if (feeds_toml.roman && (key in feeds_toml.roman)) {
+    return feeds_toml.roman[key];
+  }
+
+  return null;
+}
+
 function get_user_nick(text) {
   if (feeds_toml.nicks && (text in feeds_toml.nicks)) {
     return feeds_toml.nicks[text];
@@ -176,6 +185,18 @@ function parse_hangul(text, force, obj) {
       splitted[i] = splitted[i].slice(0, splitted[i].length - 3) + "ee";
     }
 
+    if (i > 0) {
+      var prevsec = splitted[i - 1];
+      var prevchar = prevsec[prevsec.length - 1];
+      if (splitted[i] === "i" &&
+          (prevchar === "a" ||
+           prevchar === "e" ||
+           prevchar === "o" ||
+           prevchar === "u")) {
+        splitted[i] = "yi";
+      }
+    }
+
     if (i + 1 == splitted.length) {
       if (splitted[i].endsWith("u") && !splitted[i].endsWith("eu")) {
         splitted[i] = splitted[i].slice(0, splitted[i].length - 1) + "oo";
@@ -221,7 +242,17 @@ function parse_hangul(text, force, obj) {
   }
 
   var joined = splitted.join("");
-  var retval = joined.charAt(0).toUpperCase() + joined.slice(1);
+  var words = joined.split(" ");
+  var newwords = [];
+
+  words.forEach((word) => {
+    if (word.length > 1)
+      newwords.push(word.charAt(0).toUpperCase() + word.slice(1));
+    else
+      newwords.push(word);
+  });
+
+  var retval = newwords.join(" ");
   //console.log(retval);
   return retval;
 }
@@ -289,6 +320,7 @@ function parse_name(text, obj) {
 
   var lastfirst = get_last_firstname(text);
   lastname = parse_hangul(lastfirst[0], false, obj);
+  var lastname_force = parse_hangul(lastfirst[0], true, obj);
   rest = lastfirst[1];
   /*if (text.indexOf(" ") < 0) {
     lastname = parse_hangul(text[0], false, obj);
@@ -298,38 +330,40 @@ function parse_name(text, obj) {
     rest = text.replace(/^[^ ]* +/, "");
   }*/
 
-  if (text[0] === "김") {
-    lastname = "Kim";
-  } else if (text[0] === "이") {
-    lastname = "Lee";
-  } else if (text[0] === "박") {
-    lastname = "Park";
-  } else if (text[0] === "임") { // should this be kept?
-    lastname = "Lim";
-  } else if (text[0] === "오") {
-    lastname = "Oh";
-  } else if (text[0] === "정") {
-    lastname = "Jung";
-  } else if (text[0] === "노") {
-    lastname = "Noh";
-  } else if (text[0] === "강") {
-    lastname = "Kang";
-  } else if (text[0] === "함") {
-    lastname = "Hahm";
-  } else if (text[0] === "최") {
-    lastname = "Choi";
-  } else if (text[0] === "권") {
-    lastname = "Kwon";
-  } else if (text[0] === "추") {
-    lastname = "Chu";
-  } else if (text[0] === "기") {
-    lastname = "Ki";
-  } else if (text[0] === "안") {
-    lastname = "Ahn";
-  } else if (text[0] === "간") {
-    lastname = "Kan";
-  } else if (text[0] === "류") {
-    lastname = "Ryu";
+  if (lastname === lastname_force) {
+    if (text[0] === "김") {
+      lastname = "Kim";
+    } else if (text[0] === "이") {
+      lastname = "Lee";
+    } else if (text[0] === "박") {
+      lastname = "Park";
+    } else if (text[0] === "임") { // should this be kept?
+      lastname = "Lim";
+    } else if (text[0] === "오") {
+      lastname = "Oh";
+    } else if (text[0] === "정") {
+      lastname = "Jung";
+    } else if (text[0] === "노") {
+      lastname = "Noh";
+    } else if (text[0] === "강") {
+      lastname = "Kang";
+    } else if (text[0] === "함") {
+      lastname = "Hahm";
+    } else if (text[0] === "최") {
+      lastname = "Choi";
+    } else if (text[0] === "권") {
+      lastname = "Kwon";
+    } else if (text[0] === "추") {
+      lastname = "Chu";
+    } else if (text[0] === "기") {
+      lastname = "Ki";
+    } else if (text[0] === "안") {
+      lastname = "Ahn";
+    } else if (text[0] === "간") {
+      lastname = "Kan";
+    } else if (text[0] === "류") {
+      lastname = "Ryu";
+    }
   }
 
   var nameval = parse_hangul(rest, false, obj);
@@ -427,6 +461,18 @@ function get_name(text, member) {
       //ret.nicks.push(parse_hangul_obj(x, false, alt));
       upush(ret.nicks, parse_hangul_obj(x, false, alt));
     });
+  }
+
+  if ("eng_kr_name" in alt) {
+    ret.eng_kr_name = alt.eng_kr_name;
+  }
+
+  if ("alt_groups" in alt) {
+    ret.alt_groups = alt.alt_groups;
+  }
+
+  if ("noupload" in alt) {
+    ret.noupload = alt.noupload;
   }
 
   if (text[0] === "@") {
@@ -589,12 +635,23 @@ function parse_member(obj, options) {
     member.names = name.names;
     member.nicks = name.nicks;
     member.has_user_nick = name.has_user_nick;
+    member.eng_kr_name = name.eng_kr_name;
+    member.alt_groups = name.alt_groups;
+    member.noupload = name.noupload;
   }
 
 
   if (options) {
     if (options.group && !in_nogroups(options.group)) {
       member.group = options.group;
+      member.group_roman = parse_hangul_first(member.group);
+
+      if (options.groupcomment) {
+        member.groupcomment = options.groupcomment;
+        var newroman = get_comment_roman(member.group, member.groupcomment);
+        if (newroman)
+          member.group_roman = newroman;
+      }
     }
 
     if (options.ex) {
@@ -610,6 +667,13 @@ function parse_member(obj, options) {
     }
   }
 
+  if (member.alt_groups) {
+    member.alt_groups_roman = [];
+    for (var i = 0; i < member.alt_groups.length; i++) {
+      member.alt_groups_roman.push(parse_hangul_first(member.alt_groups[i]));
+    }
+  }
+
   /*if (options && options.site) {
     member[options.site + "_obj"] = obj;
   } else {
@@ -620,9 +684,10 @@ function parse_member(obj, options) {
 
   if (options) {
     if (options.ex) {
-      upush(member.tags, "전");
+      //upush(member.tags, "전");
       upush(member.tags, "前");
       upush(member.tags, "ex");
+      upush(member.tags, "탈퇴");
     }
 
     if (member.group) {
@@ -643,6 +708,16 @@ function parse_member(obj, options) {
           upush(member.tags, parse_hangul(x));
         });
       }
+    }
+  }
+
+  if (member.alt_groups) {
+    upush(member.tags, "멤버");
+    upush(member.tags, "member");
+
+    for (var i = 0; i < member.alt_groups.length; i++) {
+      upush(member.tags, member.alt_groups[i]);
+      upush(member.tags, member.alt_groups_roman[i]);
     }
   }
 
@@ -681,7 +756,7 @@ function parse_member(obj, options) {
       grouptitle = "Ex-";
     }
 
-    grouptitle += parse_hangul_first(member.group) + " ";
+    grouptitle += member.group_roman + " ";
 
     if (member.family) {
       if (member.nicks_roman_first &&
@@ -843,6 +918,7 @@ function do_sns(site) {
 
   for (var group in groups) {
     var groupname = group.replace(/ *#.*/, "");
+    var groupcomment = group.replace(/.*# */, "");
     /*console.log(group);
       console.log(parse_hangul(group));
       console.log("---");*/
@@ -861,7 +937,7 @@ function do_sns(site) {
         if (member === "前") {
           var exes = flatten_obj(member_obj);
           for (var ex in exes) {
-            var options = {ex: true, group: groupname, site};
+            var options = {ex: true, group: groupname, groupcomment: groupcomment, site};
             if (exes[ex].parents.indexOf("잠정") >= 0) {
               options.haitus = true;
             }
@@ -870,10 +946,10 @@ function do_sns(site) {
         } else if (member === "가족") {
           var family = flatten_obj(member_obj);
           for (var f in family) {
-            members.push(parse_member(family[f].obj, {family: true, group: groupname, site}));
+            members.push(parse_member(family[f].obj, {family: true, group: groupname, groupcomment: groupcomment, site}));
           }
         }
-        members.push(parse_member(member_obj, {group: groupname, site}));
+        members.push(parse_member(member_obj, {group: groupname, groupcomment: groupcomment, site}));
       }
     } else {
       members.push(parse_member(groups[group], {site}));

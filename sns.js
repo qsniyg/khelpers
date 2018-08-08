@@ -162,7 +162,8 @@ function find_members_by_group(members, group) {
 
     if (member.alt !== group &&
         member.group !== group &&
-        (!member.nicks || !member.nicks[0] || member.nicks[0].hangul !== group || member.group)) {
+        (!member.nicks || !member.nicks[0] || member.nicks[0].hangul !== group || member.group) &&
+        (!member.alt_groups || member.alt_groups.indexOf(group) < 0)) {
       continue;
     }
 
@@ -223,7 +224,8 @@ function unescape_text(text) {
     .replace(/\\\*/g, "*")
     .replace(/\\\./g, ".")
     .replace(/\\\^/g, "^")
-    .replace(/\\\[/g, "[");
+    .replace(/\\\[/g, "[")
+    .replace(/\\>/g, ">");
 }
 
 function markdown_to_text(text) {
@@ -266,7 +268,8 @@ function markdown_to_text(text) {
 
 function markdown_to_html(text) {
   return showdown_converter.makeHtml(text)
-    .replace(/<p> *- *<\/p>/g, "<br />");
+    .replace(/<p> *- *<\/p>/g, "<br />")
+    .replace(/\\^/g, "^");
 }
 
 var markdown_control = {
@@ -275,7 +278,8 @@ var markdown_control = {
   "~": "\\~",
   "*": "\\*",
   ".": "\\.",
-  "^": "\\^"
+  "^": "\\^",
+  ">": "\\>"
 };
 
 var special_markdown_control = {
@@ -343,9 +347,10 @@ function escape_text(text, redo) {
   splitted.forEach((split) => {
     if (split[0] === "@") {
       // https://stackoverflow.com/a/17087528
-      // [a-zA-Z0-9_.]
-      var split_username = split.replace(/^@([a-zA-Z0-9_.]+).*?$/, "$1");
-      var split_rest = split.replace(/^@[a-zA-Z0-9_.]+(.*?)$/, "$1");
+      // \ since _ and . are escaped
+      // [a-zA-Z0-9_.\\]
+      var split_username = split.replace(/^@([a-zA-Z0-9_.\\]+).*?$/, "$1");
+      var split_rest = split.replace(/^@[a-zA-Z0-9_.\\]+(.*?)$/, "$1");
       newsplitted.push("[@" + split_username + "](https://www.instagram.com/" + unescape_text(split_username) + "/)" + split_rest);
     } else {
       newsplitted.push(split);
@@ -437,8 +442,48 @@ function upload_video_old(video) {
   });
 }
 
+
+var scopes = [
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube'
+];
+var youtube = null;
+
+function upload_video_yt(video) {
+  var video_parsed = path.parse(video);
+
+  var title = path.basename(video_parsed.dir) + "/" + video_parsed.name;
+  var base_request = {
+    part: 'id,snippet,status',
+    notifySubscribers: false,
+    resource: {
+      snippet: {
+        title: title,
+        description: ""
+      },
+      status: {
+        privacyStatus: "unlisted"
+      }
+    },
+    media: {
+      body: fs.createReadStream(video)
+    }
+  };
+
+
+  return new Promise((resolve, reject) => {
+    youtube.videos.insert(base_request, function (err, data) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({url: "https://youtu.be/" + data.id});
+      }
+    });
+  });
+}
+
 var ranalready = false;
-function upload_video(video) {
+function upload_video_streamable(video) {
   if (false) {
     var chance = new require('chance')();
     return new Promise((resolve, reject) => {
@@ -1102,6 +1147,12 @@ function update_blogger_main(filename, splitted) {
         labels.push(item.member.group);
         labels.push(parse_feeds.parse_hangul_first(item.member.group));
       }
+      if (item.member.alt_groups) {
+        for (var i = 0; i < item.member.alt_groups.length; i++) {
+          labels.push(item.member.alt_groups[i]);
+          labels.push(item.member.alt_groups_roman[i]);
+        }
+      }
       if (item.member.names[0]) {
         labels.push(item.member.names[0].hangul);
         labels.push(item.member.names[0].roman_first);
@@ -1564,7 +1615,8 @@ function update_twitter_main(filename, splitted) {
         // family member
         usertext = user.replace(/\(/, "(" + groupname.toLowerCase() + " ");
       } else {
-        usertext = groupname.toLowerCase() + " " + user;
+        //usertext = groupname.toLowerCase() + " " + user;
+        usertext = item.member.group_roman.toLowerCase() + " " + user;
         if (user === groupname.toLowerCase() || group_alts.indexOf(user) >= 0)
           usertext = user;//groupname.toLowerCase();
       }
@@ -1892,7 +1944,7 @@ function update_reddit(filename) {
 
     for (var j = 0; j < current_links.length; j++) {
       if (current_links[j] in usernames) {
-        users[parse_name_from_title(group_members[i].title, group_hangul)] = true;
+        users[parse_name_from_title(group_members[i].title, group_hangul, group_members[i])] = true;
 
         if (group_members[i].nicks[0].hangul === group_hangul) {
           forcegroup = true;
@@ -1902,7 +1954,7 @@ function update_reddit(filename) {
     /*if (instagram_username in usernames ||
         twitter_username in usernames ||
         weibo_username in usernames)
-      users[parse_name_from_title(group_members[i].title, group_hangul)] = true;*/
+      users[parse_name_from_title(group_members[i].title, group_hangul, group_members[i])] = true;*/
   }
 
   var prefix = groupname;
@@ -2159,6 +2211,7 @@ function update_file_main(filename, splitted) {
           }, (err) => {
             console.log("Error uploading image: " + images[key]);
             console.log("---");
+            errors.push(err);
           }));
         } else if (Object.keys(images).length > 1) {
           var key = Object.keys(images)[0];
@@ -2185,6 +2238,7 @@ function update_file_main(filename, splitted) {
             console.log("Error uploading album");
             console.dir(images);
             console.log("---");
+            errors.push(err);
           }));
         }
 
@@ -2192,10 +2246,11 @@ function update_file_main(filename, splitted) {
         for (var x in videos) {
           promises.push(((x, x_i) => {
             return new Promise((resolve, reject) => {
-              upload_video(videos[x]).then(
+              upload_video_yt(videos[x]).then(
                 (data) => {
                   //console.dir(data);
-                  var text = "https://streamable.com/" + data.shortcode + " - " + story;
+                  //var text = "https://streamable.com/" + data.shortcode + " - " + story;
+                  var text = data.url + " - " + story;
                   if (videos.length > 1)
                     text += "video " + (x_i + 1);
                   else
@@ -2289,7 +2344,17 @@ function update_blogger(filename) {
 function update_file(filename) {
   var contents = fs.readFileSync(filename).toString('utf8');
   var splitted = contents.split("\n");
-  return update_file_main(filename, splitted);
+
+  google_oauth("youtube_sns", scopes, function(auth) {
+    youtube = google.youtube({
+      version: 'v3',
+      auth
+    });
+
+    update_file_main(filename, splitted);
+  });
+
+  return;
 
   var newsplitted = [];
   var promises = [];
@@ -2348,15 +2413,22 @@ function update_file(filename) {
   });
 }
 
-function parse_name_from_title(title, group) {
+function parse_name_from_title(title, group, member) {
   var base = parse_feeds.strip(title);
   if (base === parse_feeds.strip(parse_feeds.parse_hangul_first(group)))
     return base;
 
-  return parse_feeds.strip(title
+  base = parse_feeds.strip(title
                            .replace(parse_feeds.parse_hangul_first(group), "")
                            .replace(/\( */, "(")
                            .replace(/Ex-/, ""));
+
+  if (member.alt_groups && member.alt_groups.indexOf(group) >= 0) {
+
+    base = parse_feeds.strip(base.replace(member.group_roman, ""));
+  }
+
+  return base;
 }
 
 function do_timestamp(ts) {
@@ -2367,7 +2439,7 @@ function do_timestamp(ts) {
 
 function main() {
   if (process.argv.length < 3) {
-    console.log("groupname [start_timestamp] [-?end_timestamp] [re|tw]");
+    console.log("groupname [start_timestamp] [[-]end_timestamp] [re|tw|bl]");
     return;
   }
 
@@ -2543,7 +2615,7 @@ function main() {
         members[i].accounts.forEach((account) => {
           var title;
           if (members[i].nicks) {
-            title = parse_name_from_title(members[i].title, group).toLowerCase();
+            title = parse_name_from_title(members[i].title, group, members[i]).toLowerCase();
             link_names[account.link] = title;
           }
 
@@ -2582,7 +2654,7 @@ function main() {
             if (!members[i].nicks)
               continue;
 
-            instagram_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
+            instagram_username_names[member_username] = parse_name_from_title(members[i].title, group, members[i]).toLowerCase();
           }
         }
 
@@ -2595,7 +2667,7 @@ function main() {
             if (!members[i].nicks)
               continue;
 
-            twitter_username_names[member_username] = parse_name_from_title(members[i].title, group).toLowerCase();
+            twitter_username_names[member_username] = parse_name_from_title(members[i].title, group, members[i]).toLowerCase();
           }
         }
 
@@ -2609,7 +2681,7 @@ function main() {
             if (!members[i].nicks)
               continue;
 
-            weibo_username_names[userid] = parse_name_from_title(members[i].title, group).toLowerCase();
+            weibo_username_names[userid] = parse_name_from_title(members[i].title, group, members[i]).toLowerCase();
             weibo_username_names[member_username] = weibo_username_names[userid];
             weibo_userids_to_usernames[userid] = member_username;
           }
@@ -2826,7 +2898,23 @@ function main() {
           var folder_username = member_username;
           if (subfolder === "instagram")
             folder_username = member_username.toLowerCase();
-          var dl_path = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, subfolder, member_username));
+
+          var dl_parent = expandHomeDir(path.join(parse_feeds.feeds_toml.general.dldir, subfolder));
+          var dl_parent_items = fs.readdirSync(dl_parent);
+          var member_username_path = member_username;
+          var lastmodified = 0;
+          for (var x = 0; x < dl_parent_items.length; x++) {
+            var item = dl_parent_items[x];
+            if (item.toLowerCase() === member_username.toLowerCase()) {
+              var mtime = fs.statSync(path.join(dl_parent, item)).mtimeMs;
+              if (mtime > lastmodified) {
+                member_username_path = item;
+                lastmodified = mtime;
+              }
+            }
+          }
+
+          var dl_path = path.join(dl_parent, member_username_path);
           var items = fs.readdirSync(dl_path);
           items = items.sort(naturalSort);
           for (var x = 0; x < mmember.length; x++) {
@@ -2843,7 +2931,8 @@ function main() {
             var has_nonblank = false;
 
             if (subfolder === "twitter" &&
-                text.match(/https?:\/\/www\.instagram\.com\/p\/[^ ]* *$/))
+                (text.match(/https?:\/\/www\.instagram\.com\/p\/[^ ]* *$/) ||
+                 text.match(/^RT @/)))
               continue;
 
             if (trim_text(text) === "(n/a)") {

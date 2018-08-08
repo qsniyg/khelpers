@@ -136,64 +136,122 @@ function upload_video_yt(options) {
       auth
     });
 
-    var req = youtube.videos.insert({
-      part: 'id,snippet,status',
+    var base_request = {
+      part: 'id,snippet,status,localizations',
       notifySubscribers: false,
       resource: {
         snippet: {
           title: options.title,
           description: options.description,
           tags: options.tags,
+          defaultLanguage: "en",
           defaultAudioLanguage: "ko-KR"
         },
         status: {
           privacyStatus: 'private'
+        },
+        localizations: {
+          "ko-KR": {
+            title: options.title_korean,
+            description: options.description
+          }
         }
-      },
-      media: {
+      }
+    };
+
+    var req;
+    if (options.youtube_id) {
+      base_request.resource.id = options.youtube_id;
+
+      youtube.videos.list({
+        id: options.youtube_id,
+        part: 'id,snippet,status,localizations'
+      }, function(err, data) {
+        var result = data.items[0];
+
+        console.dir(result);
+
+        var number = result.snippet.title.replace(/.* ([0-9]+) \[[0-9]+\][^a-zA-Z0-9]*$/, "$1");
+        console.log(number);
+        if (number !== result.snippet.title) {
+          base_request.resource.snippet.title = base_request.resource.snippet.title
+            .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " " + number + " $1");
+          base_request.resource.localizations["ko-KR"].title = base_request.resource.localizations["ko-KR"].title
+            .replace(/ [0-9]+$/, " " + number);
+        } else {
+          base_request.resource.snippet.title = base_request.resource.snippet.title
+            .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " $1");
+          base_request.resource.localizations["ko-KR"].title = base_request.resource.localizations["ko-KR"].title
+            .replace(/ [0-9]+$/, "");
+        }
+
+        for (var item in result.snippet) {
+          if (!(item in base_request.resource.snippet))
+            base_request.resource.snippet[item] = result.snippet[item];
+        }
+
+        base_request.resource.status = result.status;
+
+        console.dir(base_request);
+
+        req = youtube.videos.update(base_request, function (err, data) {
+          if (err) {
+            console.error('Error: ' + err);
+          } else {
+            console.log("Updated");
+          }
+
+          process.exit();
+        });
+      });
+    } else {
+      base_request.media = {
         body: fs.createReadStream(options.file)
-      },
-      headers: {
+      };
+
+      /*base_request.headers = {
         Slug: path.basename(options.file)
-      }
-    }, function (err, data) {
-      if (err) {
-        console.error('Error: ' + err);
+      }*/
 
-        notifier.notify({
-          title: "[YT] Live error",
-          message: 'Error uploading live: ' + options.title + ' to youtube\nReason: ' + err
-        });
-      } else {
-        notifier.notify({
-          title: "[YT] Live uploaded",
-          message: 'Live "' + options.title + '" has been uploaded to youtube'
-        });
-      }
+      req = youtube.videos.insert(base_request, function (err, data) {
+        if (err) {
+          console.error('Error: ' + err);
 
-      //process.exit();
-      if (ytupload)
-        process.exit();
-      upload_video_dm(options);
-    });
+          notifier.notify({
+            title: "[YT] Live error",
+            message: 'Error uploading live: ' + options.title + ' to youtube\nReason: ' + err
+          });
+        } else {
+          notifier.notify({
+            title: "[YT] Live uploaded",
+            message: 'Live "' + options.title + '" has been uploaded to youtube'
+          });
+        }
 
-    var fileSize = fs.statSync(options.file).size;
+        //process.exit();
+        if (ytupload)
+          process.exit();
+        upload_video_dm(options);
+      });
 
-    // show some progress
-    var id = setInterval(function () {
-      var uploadedBytes = req.req.connection._bytesDispatched;
-      var uploadedMBytes = uploadedBytes / 1000000;
-      var progress = uploadedBytes > fileSize
-          ? 100 : (uploadedBytes / fileSize) * 100;
-      /*process.stdout.clearLine();
-        process.stdout.cursorTo(0);*/
-      /*process.stdout.write*/console.log(uploadedMBytes.toFixed(2) + ' MBs uploaded. ' +
-                                          progress.toFixed(2) + '% completed.');
-      if (progress === 100) {
-        /*process.stdout.write*/console.log('\nDone uploading, waiting for response...\n');
-        clearInterval(id);
-      }
-    }, 1000);
+      var fileSize = fs.statSync(options.file).size;
+
+      // show some progress
+      var id = setInterval(function () {
+        var uploadedBytes = req.req.connection._bytesDispatched;
+        var uploadedMBytes = uploadedBytes / 1000000;
+        var progress = uploadedBytes > fileSize
+            ? 100 : (uploadedBytes / fileSize) * 100;
+        /*process.stdout.clearLine();
+          process.stdout.cursorTo(0);*/
+        /*process.stdout.write*/console.log(uploadedMBytes.toFixed(2) + ' MBs uploaded. ' +
+                                            progress.toFixed(2) + '% completed.');
+        if (progress === 100) {
+          /*process.stdout.write*/console.log('\nDone uploading, waiting for response...\n');
+          clearInterval(id);
+        }
+      }, 1000);
+    }
   });
 }
 
@@ -227,6 +285,7 @@ function create_timestamp(date) {
 var dmupload = false;
 var ytupload = false;
 var noupload = false;
+var youtubeid = null;
 function main() {
   if (process.argv.length < 3) {
     console.log("Need filename");
@@ -241,6 +300,8 @@ function main() {
       ytupload = true;
     } else if (process.argv[3] === "no") {
       noupload = true;
+    } else if (process.argv[3].match(/^https?:\/\/(?:www.)?youtube\.com/)) {
+      youtubeid = process.argv[3].replace(/.*\/.*?[?&](?:v|video_id)=([^&]*).*?$/, "$1");
     }
   }
 
@@ -289,7 +350,7 @@ function main() {
 
         var name = "";
         var member_name = "";
-        if (member.group) {
+        if (member.group && !member.family) {
           if (member.ex && !member.haitus) {
             name = "Ex-";
           }
@@ -317,14 +378,69 @@ function main() {
             name += member.alt;
         }
 
-        if (member.names && member.names[0] && member.names[0].hangul !== member_name)
+        if (member.eng_kr_name)
+          name += " (" + member.eng_kr_name + ")";
+        else if (member.names && member.names[0] && member.names[0].hangul !== member_name)
           name += " (" + member.names[0].hangul + ")";
         else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== member_name)
           name += " (" + member.nicks[0].hangul + ")";
 
+
+        var korean_name = "";
+        var korean_member_name = "";
+        if (member.group) {
+          var kr_ex = "";
+          var kr_ex1 = "";
+          if (member.ex && !member.haitus) {
+            kr_ex = "前멤버 ";
+            kr_ex1 = "前 ";
+          }
+
+          var korean_group = member.group;
+
+          if (member.nicks && member.nicks[0])
+            korean_member_name = member.nicks[0].hangul;
+          else if (member.names && member.names[0])
+            korean_member_name = member.names[0].hangul;
+          else
+            korean_member_name = member.alt;
+
+          if (korean_member_name !== korean_group)
+            //korean_name += korean_group + " " + kr_ex + korean_member_name;
+            korean_name += kr_ex1 + korean_group + " " + korean_member_name;
+          else
+            korean_name += korean_group;
+        } else {
+          if (member.nicks && member.nicks[0] &&
+              (member.has_user_nick || !(member.names_roman_first))) {
+            korean_member_name += member.nicks[0].hangul;
+          } else if (member.names && member.names[0]) {
+            korean_member_name += member.names[0].hangul;
+          } else {
+            korean_member_name += member.alt;
+          }
+
+          korean_name = korean_member_name;
+        }
+
+        if (member.names && member.names[0] && member.names[0].hangul !== korean_member_name)
+          korean_name += " (" + member.names[0].hangul + ")";
+        else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== korean_member_name &&
+                 member.has_user_nick)
+          korean_name += " (" + member.nicks[0].hangul + ")";
+
         var firsttitle = name + " Instagram Live";
+        var firsttitle_korean = korean_name + " 인스타라이브";
+
+        if (member.noupload) {
+          firsttitle += " NOUPLOAD";
+          firsttitle_korean += " NOUPLOAD";
+        }
+
         var title = firsttitle + endtitle;
+        var title_korean = firsttitle_korean + endtitle;
         console.log(title);
+        console.log(title_korean);
 
         console.log(description);
 
@@ -332,10 +448,13 @@ function main() {
 
         do_upload({
           firsttitle: firsttitle,
+          firsttitle_korean: firsttitle_korean,
           endtitle: endtitle,
+          timestamp: timestamp,
           description: description,
           tags: member.tags,
-          file: filename
+          file: filename,
+          youtube_id: youtubeid
         });
         return;
       }
@@ -343,10 +462,13 @@ function main() {
 
     do_upload({
       firsttitle: "@" + username_str + " Instagram Live",
+      firsttitle_korean: "@" + username_str + " 인스타라이브",
       endtitle,
+      timestamp,
       description,
       file: filename,
-      tags: [username_str]
+      tags: [username_str],
+      youtube_id: youtubeid
     });
   }).catch((e) => {
     console.error(e);
@@ -359,6 +481,7 @@ function do_upload(options) {
   }
 
   options.title = options.firsttitle + options.endtitle;
+  options.title_korean = options.timestamp + " " + options.firsttitle_korean;
 
   get_videos().then((data) => {
     var count = 0;
@@ -372,12 +495,14 @@ function do_upload(options) {
     if (count > 0) {
       count++;
       options.title = options.firsttitle + " " + count + options.endtitle;
+      options.title_korean = options.timestamp + " " + options.firsttitle_korean + " " + count;
       console.log(options.title);
     }
 
     if (dmupload) {
       upload_video_dm({
         title: options.title,
+        title_korean: options.title_korean,
         description: options.description,
         tags: options.tags,
         file: options.file
@@ -386,16 +511,20 @@ function do_upload(options) {
     }
     upload_video({
       title: options.title,
+      title_korean: options.title_korean,
       description: options.description,
       tags: options.tags,
-      file: options.file
+      file: options.file,
+      youtube_id: options.youtube_id
     });
   }, () => {
     upload_video({
       title: options.title,
+      title_korean: options.title_korean,
       description: options.description,
       tags: options.tags,
-      file: options.file
+      file: options.file,
+      youtube_id: options.youtube_id
     });
   });
 }
