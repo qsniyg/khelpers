@@ -8,6 +8,8 @@ const notifier = require('node-notifier');
 var DMClient = require('dailymotion-sdk').client;
 var moment = require('moment-timezone');
 var path = require('path');
+var mustache = require('mustache');
+mustache.escape = function(text) {return text;};
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -153,7 +155,7 @@ function upload_video_yt(options) {
         localizations: {
           "ko-KR": {
             title: options.title_korean,
-            description: options.description
+            description: options.description_kr
           }
         }
       }
@@ -286,27 +288,46 @@ var dmupload = false;
 var ytupload = false;
 var noupload = false;
 var youtubeid = null;
+var desc_prepend = "";
+var desc_prepend_kr = "";
 function main() {
-  if (process.argv.length < 3) {
+  var argv = [];
+  for (var i = 0; i < process.argv.length; i++) {
+    argv.push(process.argv[i]);
+  }
+
+  if (argv.length < 3) {
     console.log("Need filename");
     return;
   }
 
+  var filename = process.argv[2];
+  //console.log(filename);
+  var real_filename = filename;
+
   //var dmupload = false;
-  if (process.argv.length == 4) {
-    if (process.argv[3] === "dm") {
-      dmupload = true;
-    } else if (process.argv[3] === "yt") {
-      ytupload = true;
-    } else if (process.argv[3] === "no") {
-      noupload = true;
-    } else if (process.argv[3].match(/^https?:\/\/(?:www.)?youtube\.com/)) {
-      youtubeid = process.argv[3].replace(/.*\/.*?[?&](?:v|video_id)=([^&]*).*?$/, "$1");
+  if (argv.length >= 4) {
+    for (var i = 3; i < argv.length; i++) {
+      if (argv[i] === "dm") {
+        dmupload = true;
+      } else if (argv[i] === "yt") {
+        ytupload = true;
+      } else if (argv[i] === "no") {
+        noupload = true;
+      } else if (argv[i].match(/^https?:\/\/(?:www.)?youtube\.com/)) {
+        youtubeid = argv[i].replace(/.*\/.*?[?&](?:v|video_id)=([^&]*).*?$/, "$1");
+      } else if (argv[i].indexOf("prepend=") === 0) {
+        desc_prepend = argv[i].replace(/^[^=]*=/, "") + "\n\n";
+      } else if (argv[i].indexOf("prepend_kr=") === 0) {
+        desc_prepend_kr = argv[i].replace(/^[^=]*=/, "") + "\n\n";
+      } else if (argv[i].indexOf("real=") === 0) {
+        real_filename = argv[i].replace(/^[^=]*=/, "");
+      }
     }
   }
 
-  var filename = process.argv[2];
-  //console.log(filename);
+  if (desc_prepend && !desc_prepend_kr)
+    desc_prepend_kr = desc_prepend;
 
   var matchobj = filename.match(/\/instagram\/([^/]*)\/\(([^)]*)\)/);
   if (!matchobj) {
@@ -325,7 +346,7 @@ function main() {
   timestamp = create_timestamp(date);
   var endtitle = " [" + timestamp + "]";
 
-  var description = "Instagram: https://www.instagram.com/" + username_str + "/";
+  var description = desc_prepend + "Instagram: https://www.instagram.com/" + username_str + "/";
 
   parse_feeds.parse_feeds().then((members) => {
     for (var i = 0; i < members.length; i++) {
@@ -347,6 +368,28 @@ function main() {
       //if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
       if (member_usernames.indexOf(username_str.toLowerCase()) >= 0) {
         console.log(member);
+
+        var info = {
+          member: member,
+
+          sitename_en: "Instagram",
+          sitename_kr: "인스타그램",
+
+          member_url: "https://www.instagram.com/" + username_str + "/"
+        };
+
+        var description_template = parse_feeds.feeds_toml.general.description_template;
+        if (!description_template) {
+          description_template = "{{sitename_en}}: {{member_url}}";
+        }
+
+        var description_template_kr = parse_feeds.feeds_toml.general.description_template_kr;
+        if (!description_template_kr) {
+          description_template = "{{sitename_kr}}: {{member_url}}";
+        }
+
+        var description_en = desc_prepend + mustache.render(description_template, info);
+        var description_kr = desc_prepend_kr + mustache.render(description_template_kr, info);
 
         var name = "";
         var member_name = "";
@@ -442,7 +485,8 @@ function main() {
         console.log(title);
         console.log(title_korean);
 
-        console.log(description);
+        console.log(description_en);
+        console.log(description_kr);
 
         member.tags.push(username_str);
 
@@ -451,9 +495,10 @@ function main() {
           firsttitle_korean: firsttitle_korean,
           endtitle: endtitle,
           timestamp: timestamp,
-          description: description,
+          description: description_en,
+          description_kr: description_kr,
           tags: member.tags,
-          file: filename,
+          file: real_filename,
           youtube_id: youtubeid
         });
         return;
@@ -465,8 +510,9 @@ function main() {
       firsttitle_korean: "@" + username_str + " 인스타라이브",
       endtitle,
       timestamp,
-      description,
-      file: filename,
+      description: description,
+      description_kr: description,
+      file: real_filename,
       tags: [username_str],
       youtube_id: youtubeid
     });
@@ -504,6 +550,7 @@ function do_upload(options) {
         title: options.title,
         title_korean: options.title_korean,
         description: options.description,
+        description_kr: options.description_kr,
         tags: options.tags,
         file: options.file
       });
@@ -513,6 +560,7 @@ function do_upload(options) {
       title: options.title,
       title_korean: options.title_korean,
       description: options.description,
+      description_kr: options.description_kr,
       tags: options.tags,
       file: options.file,
       youtube_id: options.youtube_id
@@ -522,6 +570,7 @@ function do_upload(options) {
       title: options.title,
       title_korean: options.title_korean,
       description: options.description,
+      description_kr: options.description_kr,
       tags: options.tags,
       file: options.file,
       youtube_id: options.youtube_id

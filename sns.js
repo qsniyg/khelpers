@@ -846,7 +846,9 @@ function parse_txt(filename, splitted) {
         !splitted[i].match(/^https?:\/\/(?:www\.)?twitter\.com\//) &&
         !splitted[i].match(/^https?:\/\/(?:www\.)?weibo\.com\//) &&
         !splitted[i].match(/^https?:\/\/([^/.]*\.)?imgur\.com\//) &&
-        !splitted[i].match(/^https?:\/\/([^/.]*\.)?streamable\.com\//)) {
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?streamable\.com\//) &&
+        !splitted[i].match(/^https?:\/\/youtu\.be\//) &&
+        !splitted[i].match(/^https?:\/\/([^/.]*\.)?youtube\.com\//)) {
       continue;
     }
 
@@ -1275,6 +1277,51 @@ function update_blogger_main(filename, splitted) {
               }
 
               if (response.statusCode === 404) {
+                item.deleted = true;
+              } else {
+                var data = JSON.parse(body);
+                firstline = data.html;
+              }
+
+              var newurl = contents_md.split("\n")[0].match(/^(http[^ ]*)/);
+              if (newurl) {
+                newurl = newurl[1];
+                do_firstline(newurl).then(
+                  () => {
+                    if (!item.deleted)
+                      firstline = data.html;
+                    resolve();
+                  },
+                  () => {
+                    reject();
+                  }
+                );
+              } else {
+                console.log("Can't find non-twitter URL, must be a text post");
+                //firstline = data.html;
+                thumbnail = null;
+                resolve();
+              }
+            });
+          });
+        } else if (url.match(/youtube.com\//) ||
+                   url.match(/youtu\.be\//)) {
+          return new Promise((resolve, reject) => {
+            var queryurl = 'https://www.youtube.com/oembed?url=' + url;
+            request(queryurl, (error, response, body) => {
+              if (error) {
+                console.dir(error);
+                return;
+              }
+
+              var data = JSON.parse(body);
+              firstline = data.html;
+              thumbnail = maximg(data.thumbnail_url);
+              resolve();
+              return;
+
+              if (response.statusCode === 404) {
+                // shouldn't happen
                 item.deleted = true;
               } else {
                 var data = JSON.parse(body);

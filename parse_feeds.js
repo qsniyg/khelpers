@@ -181,7 +181,7 @@ function parse_hangul(text, force, obj) {
       splitted[i] = "sh" + splitted[i].slice(2);
     } else if (splitted[i][0] === "c") {
       splitted[i] = "ch" + splitted[i].slice(1);
-    } else if (splitted[i].slice(splitted[i].length - 3, splitted[i].length) === "eui") {
+    } else if (i > 0 && splitted[i].slice(splitted[i].length - 3, splitted[i].length) === "eui") {
       splitted[i] = splitted[i].slice(0, splitted[i].length - 3) + "ee";
     }
 
@@ -475,6 +475,10 @@ function get_name(text, member) {
     ret.noupload = alt.noupload;
   }
 
+  if ("description_template" in alt) {
+    ret.description_template = alt.description_template;
+  }
+
   if (text[0] === "@") {
     if (ret.names.length > 0 || ret.nicks.length > 0/*text in feeds_toml*/) {
       /*var alt = feeds_toml[text];
@@ -638,6 +642,7 @@ function parse_member(obj, options) {
     member.eng_kr_name = name.eng_kr_name;
     member.alt_groups = name.alt_groups;
     member.noupload = name.noupload;
+    member.description_template = name.description_template;
   }
 
 
