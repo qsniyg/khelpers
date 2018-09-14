@@ -22,9 +22,11 @@ function parse_copyright_table(tr, id) {
 
   var cuttype = null;
   var alltext = cheerio(tds[0]).text();
-  if (alltext.indexOf("시청각 콘텐츠") >= 0) {
+  if (alltext.indexOf("시청각 콘텐츠") >= 0 ||
+      alltext.indexOf("동영상 콘텐츠") >= 0) {
     cuttype = "av";
-  } else if (alltext.indexOf("음원") >= 0) {
+  } else if (alltext.indexOf("음원") >= 0 ||
+             alltext.indexOf("음악 작품") >= 0) {
     cuttype = "a";
   } else {
     console.log("Unknown cut type: " + parse_feeds.strip(alltext));
@@ -80,7 +82,7 @@ function parse_copyright_table(tr, id) {
 
     var data = parse_feeds.strip(policyel.children[i].data);
     if (data.indexOf("차단됨") >= 0) {
-      console.log("Adding cut from " + match + " (" + start + "-" + end + ")");
+      console.log("Adding " + cuttype + " cut from " + match + " (" + start + "-" + end + ")");
       cut.push([start, end, cuttype]);
       return true;
     }
@@ -276,8 +278,10 @@ function create_video() {
   }
 
   cleanup(files);
+
+  // keep for now
   if (upload_video("/tmp/remcopy.mp4")) {
-    fs.unlinkSync("/tmp/remcopy.mp4");
+    //fs.unlinkSync("/tmp/remcopy.mp4");
   } else {
     console.error("Error running youtubeul.js");
   }
@@ -286,8 +290,8 @@ function create_video() {
 }
 
 function upload_video(filename) {
-  var pre_en = "(content id blocked part of this video, see here for the full version: %U)";
-  var pre_kr = "(콘텐츠 ID가 이 영상의 몇몇 부분을 차단됐어요 풀영상은 %U)";
+  var pre_en = "(content id blocked part of this video, see here for the full version: %U )";
+  var pre_kr = "(콘텐츠 ID가 이 영상의 몇몇 부분을 차단됐어요 풀영상은 %U )";
 
   pre_en = pre_en.replace("%U", fullversion);
   pre_kr = pre_kr.replace("%U", fullversion);
@@ -356,7 +360,7 @@ function main() {
         return;
       }
 
-      console.log(body);
+      //console.log(body);
       parse_copyright(body);
     });
   });

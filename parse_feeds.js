@@ -479,6 +479,14 @@ function get_name(text, member) {
     ret.description_template = alt.description_template;
   }
 
+  if ("old_usernames" in alt) {
+    ret.old_usernames = alt.old_usernames;
+  }
+
+  if ("upload_privacy" in alt) {
+    ret.upload_privacy = alt.upload_privacy;
+  }
+
   if (text[0] === "@") {
     if (ret.names.length > 0 || ret.nicks.length > 0/*text in feeds_toml*/) {
       /*var alt = feeds_toml[text];
@@ -643,6 +651,8 @@ function parse_member(obj, options) {
     member.alt_groups = name.alt_groups;
     member.noupload = name.noupload;
     member.description_template = name.description_template;
+    member.old_usernames = name.old_usernames;
+    member.upload_privacy = name.upload_privacy;
   }
 
 
@@ -738,6 +748,13 @@ function parse_member(obj, options) {
         break;
       }
     }
+
+    for (var i = 0; i < member.names.length; i++) {
+      if (member.names[i].hangul && has_hangul(member.names[i].hangul)) {
+        member.names_hangul_first = member.names[i].hangul;
+        break;
+      }
+    }
   }
 
   if (member.nicks) {
@@ -752,7 +769,53 @@ function parse_member(obj, options) {
         break;
       }
     }
+
+    for (var i = 0; i < member.nicks.length; i++) {
+      if (member.nicks[i].hangul && has_hangul(member.nicks[i].hangul)) {
+        member.nicks_hangul_first = member.nicks[i].hangul;
+        break;
+      }
+    }
   }
+
+  var member_name;
+  var korean_member_name;
+
+  if (member.group) {
+    if (member.nicks_roman_first)
+      member_name = member.nicks_roman_first;
+    else if (member.names_roman_first)
+      member_name = member.names_roman_first;
+    else
+      member_name = member.alt;
+
+    if (member.nicks && member.nicks_hangul_first)
+      korean_member_name = member.nicks_hangul_first;
+    else if (member.names && member.names_hangul_first)
+      korean_member_name = member.names_hangul_first;
+    else
+      korean_member_name = member.alt;
+  } else {
+    if (member.nicks_roman_first &&
+        (member.has_user_nick || !(member.names_roman_first)))
+      member_name = member.nicks_roman_first;
+    else if (member.names_roman_first)
+      member_name = member.names_roman_first;
+    else
+      member_name = member.alt;
+
+    if (member.nicks && member.nicks_hangul_first &&
+        (member.has_user_nick || !(member.names_roman_first))) {
+      korean_member_name = member.nicks_hangul_first;
+    } else if (member.names && member.names_hangul_first) {
+      korean_member_name = member.names_hangul_first;
+    } else {
+      korean_member_name = member.alt;
+    }
+  }
+
+  member.member_name_kr = korean_member_name;
+  member.member_name = member_name;
 
   var grouptitle = "";
   var title = "";
@@ -807,6 +870,42 @@ function parse_member(obj, options) {
   }
 
   member.title = title;
+
+  var title_kr = "";
+  if (member.group) {
+    var kr_ex = "";
+    var kr_ex1 = "";
+    if (member.ex && !member.haitus) {
+      kr_ex = "前멤버 ";
+      kr_ex1 = "前 ";
+    }
+
+    var korean_group = member.group;
+
+    if (member.nicks && member.nicks[0])
+      title_kr = member.nicks[0].hangul;
+    else if (member.names && member.names[0])
+      title_kr = member.names[0].hangul;
+    else
+      title_kr = member.alt;
+
+    if (title_kr !== korean_group)
+      //korean_name += korean_group + " " + kr_ex + title_kr;
+      title_kr = kr_ex1 + korean_group + " " + title_kr;
+    else
+      title_kr = korean_group;
+  } else {
+    if (member.nicks && member.nicks[0] &&
+        (member.has_user_nick || !(member.names_roman_first))) {
+      title_kr += member.nicks[0].hangul;
+    } else if (member.names && member.names[0]) {
+      title_kr += member.names[0].hangul;
+    } else {
+      title_kr += member.alt;
+    }
+  }
+
+  member.title_kr = title_kr;
 
   return member;
 }
@@ -915,7 +1014,14 @@ function do_sns(site) {
     for (var group in toplevel[folder]) {
       if (typeof toplevel[folder][group] !== "object" || in_ignoregroups(group))
         continue;
-      groups[group] = toplevel[folder][group];
+
+      if (groups[group]) {
+        for (var key in toplevel[folder][group]) {
+          groups[group][key] = toplevel[folder][group][key];
+        }
+      } else {
+        groups[group] = toplevel[folder][group];
+      }
     }
   }
 
@@ -1133,3 +1239,8 @@ function parse_feeds(noclose_db) {
   });
 }
 module.exports.parse_feeds = parse_feeds;
+
+function videoid_from_youtube_url(url) {
+  return url.match(/:\/\/[^/]*\/[^/]*?[?&](?:v|video_id)=([^&]*)/)[1];
+}
+module.exports.videoid_from_youtube_url = videoid_from_youtube_url;

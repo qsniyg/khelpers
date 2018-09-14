@@ -131,6 +131,12 @@ function upload_video_yt(options) {
     return;
   }
 
+  if (!options.privacy ||
+      (options.privacy !== "public" &&
+       options.privacy !== "unlisted")) {
+    options.privacy = "private";
+  }
+
   google_oauth("youtube", scopes, function(auth) {
     // https://github.com/google/google-api-nodejs-client/blob/master/samples/youtube/upload.js
     var youtube = google.youtube({
@@ -147,13 +153,17 @@ function upload_video_yt(options) {
           description: options.description,
           tags: options.tags,
           defaultLanguage: "en",
-          defaultAudioLanguage: "ko-KR"
+          defaultAudioLanguage: "ko"
         },
         status: {
-          privacyStatus: 'private'
+          privacyStatus: options.privacy
         },
         localizations: {
-          "ko-KR": {
+          "en": {
+            title: options.title,
+            description: options.description
+          },
+          "ko": {
             title: options.title_korean,
             description: options.description_kr
           }
@@ -178,12 +188,12 @@ function upload_video_yt(options) {
         if (number !== result.snippet.title) {
           base_request.resource.snippet.title = base_request.resource.snippet.title
             .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " " + number + " $1");
-          base_request.resource.localizations["ko-KR"].title = base_request.resource.localizations["ko-KR"].title
+          base_request.resource.localizations["ko"].title = base_request.resource.localizations["ko"].title
             .replace(/ [0-9]+$/, " " + number);
         } else {
           base_request.resource.snippet.title = base_request.resource.snippet.title
             .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " $1");
-          base_request.resource.localizations["ko-KR"].title = base_request.resource.localizations["ko-KR"].title
+          base_request.resource.localizations["ko"].title = base_request.resource.localizations["ko"].title
             .replace(/ [0-9]+$/, "");
         }
 
@@ -441,10 +451,10 @@ function main() {
 
           var korean_group = member.group;
 
-          if (member.nicks && member.nicks[0])
-            korean_member_name = member.nicks[0].hangul;
-          else if (member.names && member.names[0])
-            korean_member_name = member.names[0].hangul;
+          if (member.nicks && member.nicks_hangul_first)
+            korean_member_name = member.nicks_hangul_first;
+          else if (member.names && member.names_hangul_first)
+            korean_member_name = member.names_hangul_first;
           else
             korean_member_name = member.alt;
 
@@ -454,11 +464,11 @@ function main() {
           else
             korean_name += korean_group;
         } else {
-          if (member.nicks && member.nicks[0] &&
+          if (member.nicks && member.nicks_hangul_first &&
               (member.has_user_nick || !(member.names_roman_first))) {
-            korean_member_name += member.nicks[0].hangul;
-          } else if (member.names && member.names[0]) {
-            korean_member_name += member.names[0].hangul;
+            korean_member_name += member.nicks_hangul_first;
+          } else if (member.names && member.names_hangul_first) {
+            korean_member_name += member.names_hangul_first;
           } else {
             korean_member_name += member.alt;
           }
@@ -490,6 +500,13 @@ function main() {
 
         member.tags.push(username_str);
 
+        var privacy = "private";
+        if (member.upload_privacy &&
+            (member.upload_privacy === "unlisted" ||
+             member.upload_privacy === "public")) {
+          privacy = member.upload_privacy;
+        }
+
         do_upload({
           firsttitle: firsttitle,
           firsttitle_korean: firsttitle_korean,
@@ -499,6 +516,7 @@ function main() {
           description_kr: description_kr,
           tags: member.tags,
           file: real_filename,
+          privacy: privacy,
           youtube_id: youtubeid
         });
         return;
@@ -552,7 +570,8 @@ function do_upload(options) {
         description: options.description,
         description_kr: options.description_kr,
         tags: options.tags,
-        file: options.file
+        file: options.file,
+        privacy: options.privacy
       });
       return;
     }
@@ -563,6 +582,7 @@ function do_upload(options) {
       description_kr: options.description_kr,
       tags: options.tags,
       file: options.file,
+      privacy: options.privacy,
       youtube_id: options.youtube_id
     });
   }, () => {
@@ -573,6 +593,7 @@ function do_upload(options) {
       description_kr: options.description_kr,
       tags: options.tags,
       file: options.file,
+      privacy: options.privacy,
       youtube_id: options.youtube_id
     });
   });
