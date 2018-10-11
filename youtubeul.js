@@ -403,14 +403,18 @@ function main() {
 
         var name = "";
         var member_name = "";
-        if (member.group && !member.family) {
+        if (member.group && !member.family && !member.hide_group) {
           if (member.ex && !member.haitus) {
             name = "Ex-";
           }
 
-          var grouphangul = parse_feeds.parse_hangul_first(member.group);
+          var grouphangul = member.group_roman;
 
-          if (member.nicks_roman_first)
+          if (member.group_noupload) {
+            grouphangul += " NOUPLOAD";
+          }
+
+          if (member.nicks_roman_first && !member.use_fullname)
             member_name = member.nicks_roman_first;
           else if (member.names_roman_first)
             member_name = member.names_roman_first;
@@ -424,11 +428,13 @@ function main() {
         } else {
           if (member.nicks_roman_first &&
               (member.has_user_nick || !(member.names_roman_first)))
-            name += member.nicks_roman_first;
+            member_name += member.nicks_roman_first;
           else if (member.names_roman_first)
-            name += member.names_roman_first;
+            member_name += member.names_roman_first;
           else
-            name += member.alt;
+            member_name += member.alt;
+
+          name = member_name;
         }
 
         if (member.eng_kr_name)
@@ -441,7 +447,7 @@ function main() {
 
         var korean_name = "";
         var korean_member_name = "";
-        if (member.group) {
+        if (member.group && !member.family && !member.hide_group) {
           var kr_ex = "";
           var kr_ex1 = "";
           if (member.ex && !member.haitus) {
@@ -451,12 +457,23 @@ function main() {
 
           var korean_group = member.group;
 
-          if (member.nicks && member.nicks_hangul_first)
-            korean_member_name = member.nicks_hangul_first;
-          else if (member.names && member.names_hangul_first)
-            korean_member_name = member.names_hangul_first;
-          else
-            korean_member_name = member.alt;
+          if (member.group_noupload) {
+            korean_group += " NOUPLOAD";
+          }
+
+          if (member.nicks && !member.use_fullname) {
+            if (member.nicks_hangul_first)
+              korean_member_name = member.nicks_hangul_first;
+            else if (member.nicks_roman_first)
+              korean_member_name = member.nicks_roman_first;
+          }
+
+          if (!korean_member_name) {
+            if (member.names && member.names_hangul_first)
+              korean_member_name = member.names_hangul_first;
+            else
+              korean_member_name = member.alt;
+          }
 
           if (korean_member_name !== korean_group)
             //korean_name += korean_group + " " + kr_ex + korean_member_name;
@@ -464,9 +481,9 @@ function main() {
           else
             korean_name += korean_group;
         } else {
-          if (member.nicks && member.nicks_hangul_first &&
+          if (member.nicks && (member.nicks_hangul_first || member.nicks_roman_first) &&
               (member.has_user_nick || !(member.names_roman_first))) {
-            korean_member_name += member.nicks_hangul_first;
+            korean_member_name += member.nicks_hangul_first || member.nicks_roman_first;
           } else if (member.names && member.names_hangul_first) {
             korean_member_name += member.names_hangul_first;
           } else {

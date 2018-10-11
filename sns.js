@@ -187,6 +187,10 @@ function trim_text(text) {
   return text/*.replace(non_printable_re, "")*/.replace(/^\s+|\s+$/g, '');
 }
 
+function is_instagram_post_url(url) {
+  return url.match(/^[a-z]+:\/\/(?:www\.)?instagram\.com\/p\//);
+}
+
 function get_shortcode_from_url(url) {
   return url.replace(/.*\/p\/([^/?&]*)\/*$/, "$1");
 }
@@ -449,17 +453,17 @@ var scopes = [
 ];
 var youtube = null;
 
-function upload_video_yt(video) {
+function upload_video_yt(video, origlink) {
   var video_parsed = path.parse(video);
 
-  var title = path.basename(video_parsed.dir) + "/" + video_parsed.name;
+  var title = path.basename(video_parsed.dir) + " " + video_parsed.name;
   var base_request = {
     part: 'id,snippet,status',
     notifySubscribers: false,
     resource: {
       snippet: {
         title: title,
-        description: ""
+        description: "this is video is used for translations i do, for those who can't access the original site hosting the video"
       },
       status: {
         privacyStatus: "unlisted"
@@ -2172,6 +2176,7 @@ function update_file_main(filename, splitted) {
       continue;
     }
 
+    var origlink = splitted[i];
     var origi = i;
     i++;
     var images = {};
@@ -2293,7 +2298,7 @@ function update_file_main(filename, splitted) {
         for (var x in videos) {
           promises.push(((x, x_i) => {
             return new Promise((resolve, reject) => {
-              upload_video_yt(videos[x]).then(
+              upload_video_yt(videos[x], origlink).then(
                 (data) => {
                   //console.dir(data);
                   //var text = "https://streamable.com/" + data.shortcode + " - " + story;
@@ -2785,8 +2790,9 @@ function main() {
           return;
         }
 
-        var mcontent = {};
-        var newcontent = [];
+        var mcontent_orig = {};
+        var newcontent_orig = [];
+        var instagram_shortcodes = [];
         for (var i = 0; i < content.length; i++) {
           if ((content[i].created_at < startdate.getTime() ||
                content[i].created_at > enddate.getTime()) &&
@@ -2794,11 +2800,17 @@ function main() {
             continue;
           }
 
-          if (!(content[i].url in mcontent))
-            mcontent[content[i].url] = [];
+          if (is_instagram_post_url(content[i].link)) {
+            var shortcode = get_shortcode_from_url(content[i].link);
+            if (shortcode !== content[i].link)
+              instagram_shortcodes.push(shortcode);
+          }
 
-          newcontent.push(content[i]);
-          mcontent[content[i].url].push(content[i]);
+          if (!(content[i].url in mcontent_orig))
+            mcontent_orig[content[i].url] = [];
+
+          newcontent_orig.push(content[i]);
+          mcontent_orig[content[i].url].push(content[i]);
 
           var created = content[i].created_at;
           if (content[i].title.indexOf("[DP] ") >= 0) {
@@ -2814,7 +2826,40 @@ function main() {
           }
         }
 
-        console.log(newcontent.length);
+        var newcontent = [];
+        var mcontent = {};
+        var duplicates = 0;
+        for (var i = 0; i < newcontent_orig.length; i++) {
+          var content = newcontent_orig[i];
+
+          if (is_instagram_post_url(content.link)) {
+            var shortcode = get_shortcode_from_url(content.link);
+            var duplicate = false;
+
+            if (shortcode !== content.url) {
+              for (var j = 0; j < instagram_shortcodes.length; j++) {
+                if (shortcode.length > instagram_shortcodes[j].length &&
+                    shortcode.startsWith(instagram_shortcodes[j])) {
+                  duplicate = true;
+                  duplicates++;
+                  break;
+                }
+              }
+
+              if (duplicate)
+                continue;
+            }
+          }
+
+          newcontent.push(content);
+
+          if (!(content.url in mcontent))
+            mcontent[content.url] = [];
+
+          mcontent[content.url].push(content);
+        }
+
+        console.log(newcontent.length + " (" + duplicates + " duplicates)");
 
         var inword = false;
         var hanword = false;

@@ -8,8 +8,19 @@ var child_process = require('child_process');
 
 var cut = [];
 var videofile = null;
-var youtubeurl = null;
+var youtubeurls = [];
 var fullversion = null;
+
+function sort_cuts() {
+  cut.sort((a, b) => {
+    if (a[0] < b[0])
+      return -1;
+    else if (a[0] > b[0])
+      return 1;
+
+    return 0;
+  });
+}
 
 function parse_copyright_table(tr, id) {
   var $tr = cheerio(tr);
@@ -82,7 +93,7 @@ function parse_copyright_table(tr, id) {
 
     var data = parse_feeds.strip(policyel.children[i].data);
     if (data.indexOf("차단됨") >= 0) {
-      console.log("Adding " + cuttype + " cut from " + match + " (" + start + "-" + end + ")");
+      console.log("Adding [" + cuttype + "] cut from " + match + " (" + start + "-" + end + ")");
       cut.push([start, end, cuttype]);
       return true;
     }
@@ -106,9 +117,7 @@ function parse_copyright(body) {
       return;
   }
 
-  if (cut.length > 0) {
-    create_video();
-  }
+  sort_cuts();
 }
 
 function run_process(processname, args) {
@@ -291,7 +300,7 @@ function create_video() {
 
 function upload_video(filename) {
   var pre_en = "(content id blocked part of this video, see here for the full version: %U )";
-  var pre_kr = "(콘텐츠 ID가 이 영상의 몇몇 부분을 차단됐어요 풀영상은 %U )";
+  var pre_kr = "(콘텐츠 ID가 이 영상의 몇몇 부분을 차단했어요 풀영상은 %U )";
 
   pre_en = pre_en.replace("%U", fullversion);
   pre_kr = pre_kr.replace("%U", fullversion);
@@ -308,22 +317,41 @@ function upload_video(filename) {
 
 function main() {
   if (process.argv.length < 5) {
-    console.log("videofile youtubeurl fullversion");
+    console.log("videofile youtubeurl [youtubeurl1] fullversion");
     return;
   }
 
   videofile = process.argv[2];
-  youtubeurl = process.argv[3];
-  fullversion = process.argv[4];
+  youtubeurls = [];
+  //fullversion = process.argv[4];
 
   if (!fs.existsSync(videofile)) {
     console.log("videofile needs to exist");
     return;
   }
 
-  if (!youtubeurl.match(/^https?:\/\//)) {
-    console.log("youtubeurl needs to be a youtube video url");
-    return;
+  for (var i = 3; i < process.argv.length; i++) {
+    var youtubeurl = process.argv[i];
+
+    if (!youtubeurl.match(/^https?:\/\//)) {
+      console.log(youtubeurl + " needs to be a youtube video url");
+      return;
+    }
+
+    var youtubematch = youtubeurl.match(/:\/\/[^/]*\/[^/]*?[?&](?:v|video_id)=([^&]*)/);
+    if (!youtubematch || !youtubematch[1]) {
+      if (youtubeurls.length === 0) {
+        console.log(youtubeurl + " is not a video url");
+        return;
+      } else {
+        break;
+      }
+    }
+
+    youtubeurl = "https://www.youtube.com/video_copynotice?v=" + youtubematch[1];
+    youtubeurls.push(youtubeurl);
+
+    fullversion = process.argv[i + 1];
   }
 
   if (!fullversion.match(/^https?:\/\//)) {
@@ -331,38 +359,45 @@ function main() {
     return;
   }
 
-  var youtubematch = youtubeurl.match(/:\/\/[^/]*\/[^/]*?[?&](?:v|video_id)=([^&]*)/);
-  if (!youtubematch || !youtubematch[1]) {
-    console.log("youtubeurl is not a video url");
-    return;
-  }
-
-  youtubeurl = "https://www.youtube.com/video_copynotice?v=" + youtubematch[1];
-
   parse_feeds.parse_feeds().then((members) => {
-    request({
-      method: "GET",
-      url: youtubeurl,
-      gzip: true,
-      headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Encoding": "gzip, deflate",
-        "Accept-Language": "en",
-        "Cache-Control": "max-age=0",
-        "Sec-Metadata": "cause=forced, destination=document, target=top-level, site=cross-site",
-        "User-Agent": parse_feeds.feeds_toml.general.youtube_ua,
-        Cookie: parse_feeds.feeds_toml.general.youtube_cookie
-      }
-    }, (error, response, body) => {
-      if (error) {
-        console.error(error);
-        reject(error);
-        return;
-      }
+    var parse_youtubeurl = function(i) {
+      var youtubeurl = youtubeurls[i];
 
-      //console.log(body);
-      parse_copyright(body);
-    });
+      request({
+        method: "GET",
+        url: youtubeurl,
+        gzip: true,
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Encoding": "gzip, deflate",
+          "Accept-Language": "en",
+          "Cache-Control": "max-age=0",
+          "Sec-Metadata": "cause=forced, destination=document, target=top-level, site=cross-site",
+          "User-Agent": parse_feeds.feeds_toml.general.youtube_ua,
+          Cookie: parse_feeds.feeds_toml.general.youtube_cookie
+        }
+      }, (error, response, body) => {
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        //console.log(body);
+        parse_copyright(body);
+
+        if (i + 1 >= youtubeurls.length) {
+          console.log(cut);
+
+          if (cut.length > 0) {
+            create_video();
+          }
+        } else {
+          parse_youtubeurl(i + 1);
+        }
+      });
+    };
+
+    parse_youtubeurl(0);
   });
 }
 
