@@ -457,6 +457,9 @@ function upload_video_yt(video, origlink) {
   var video_parsed = path.parse(video);
 
   var title = path.basename(video_parsed.dir) + " " + video_parsed.name;
+  title = title
+    .replace(/</g, "[")
+    .replace(/>/g, "]");
   var base_request = {
     part: 'id,snippet,status',
     notifySubscribers: false,
@@ -2861,12 +2864,16 @@ function main() {
 
         console.log(newcontent.length + " (" + duplicates + " duplicates)");
 
+        var lastspace = true;
         var inword = false;
         var hanword = false;
+        var hashword = false;
         var words = 0;
         var hanwords = 0;
+        var hashwords = 0;
         var chars = 0;
         var hanchars = 0;
+        var hashchars = 0;
 
         for (var i = 0; i < newcontent.length; i++) {
           var cereal = cheerio.load(newcontent[i].content);
@@ -2880,8 +2887,22 @@ function main() {
                   hanwords++;
                 hanword = false;
 
+                if (hashword)
+                  hashwords++;
+                hashword = false;
+
+                if (text[j] === '#') {
+                  hashword = true;
+                }
+
                 words++;
+              } else if (lastspace) {
+                if (text[j] === '#') {
+                  hashword = true;
+                }
               }
+
+              lastspace = !!text[j].match(/\s/);
               continue;
             }
 
@@ -2892,19 +2913,26 @@ function main() {
               hanchars++;
               hanword = true;
             }
+
+            if (hashword) {
+              hashchars++;
+            }
           }
 
           if (inword) {
             words++;
             if (hanword)
               hanwords++;
+            if (hashword)
+              hashwords++;
 
             inword = false;
             hanword = false;
+            hashword = false;
           }
         }
 
-        console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ")");
+        console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ", hashtags: " + hashwords + "/" + hashchars + ")");
         if (!readlineSync.keyInYNStrict("Do you wish to continue?")) {
           return;
         }
@@ -3177,7 +3205,7 @@ function main() {
               promises.push((function(entry, entrytext, mentries, nick) {
                 return new Promise((resolve, reject) => {
                   //console.log(get_instagram_rssit_url(entry.url) + "&count=-1")
-                  request(get_instagram_rssit_url(entry.url) + "&count=-1",
+                  request(get_instagram_rssit_url(entry.url) + "&count=500",
                           (error, response, body) => {
                             if (response.statusCode === 404) {
                               // deleted post

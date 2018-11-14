@@ -10,6 +10,8 @@ var cut = [];
 var videofile = null;
 var youtubeurls = [];
 var fullversion = null;
+var rotate = "0";
+var init_offset = 0;
 
 function sort_cuts() {
   cut.sort((a, b) => {
@@ -20,6 +22,31 @@ function sort_cuts() {
 
     return 0;
   });
+
+  var newcuts = [];
+  for (var i = 0; i < cut.length; i++) {
+    var ignore = false;
+    for (var j = 0; j < newcuts.length; j++) {
+      if (cut[i][2] !== newcuts[j][2])
+        continue;
+
+      if (cut[i][0] <= newcuts[j][1]) {
+        ignore = true;
+
+        if (cut[i][1] > newcuts[j][1]) {
+          newcuts[j][1] = cut[i][1];
+        }
+
+        break;
+      }
+    }
+
+    if (!ignore) {
+      newcuts.push(cut[i]);
+    }
+  }
+
+  cut = newcuts;
 }
 
 function parse_copyright_table(tr, id) {
@@ -150,12 +177,36 @@ function run_ffmpeg(args) {
   return true;
 }
 
+function get_init_offset(input) {
+  var result = child_process.spawnSync("ffprobe", [
+    "-v", "quiet",
+    "-show_format",
+    "-print_format", "json",
+    input
+  ]);
+
+  if (!result || result.status !== 0) {
+    console.log("Error running ffprobe:");
+    console.dir(result);
+    return false;
+  }
+
+  var json = JSON.parse(result.stdout);
+  init_offset = parseInt(json.format.start_time);
+  return true;
+}
+
 function seconds_to_timestamp(seconds) {
   seconds = parseInt(seconds);
-  console.log(seconds);
   if (seconds < 0) {
+    console.log(seconds);
     return "99:59:59.00";
   }
+
+  var old_seconds = seconds;
+  seconds += init_offset;
+  console.log(seconds + " (" + old_seconds + ")");
+
 
   var result = parse_feeds.pad(parseInt(seconds / 3600), 2) + ":";
   seconds = seconds % 3600;
@@ -170,19 +221,23 @@ function make_cut(outfile, start, end, noaudio) {
     "-seek_timestamp", "-2147483648.000000"
   ];
 
+  args.push('-i');
+  args.push(videofile);
+
   if (start > 0) {
     args.push('-ss');
     args.push(seconds_to_timestamp(start));
   }
 
-  args.push.apply(args,
-                  [
-                    '-to', seconds_to_timestamp(end)
-                    //'-t', seconds_to_timestamp(end - start)
-                  ]);
-
-  args.push('-i');
-  args.push(videofile);
+  if (end >= 0) {
+    args.push.apply(args,
+                    [
+                      '-to', seconds_to_timestamp(end)
+                      //'-t', seconds_to_timestamp(end - start)
+                    ]);
+  } else {
+    args.push.apply(args, ['-t', seconds_to_timestamp(end)]);
+  }
 
   /*args.push.apply(args,
                   [
@@ -208,6 +263,12 @@ function make_cut(outfile, start, end, noaudio) {
 
   args.push("-c:v");
   args.push("copy");
+
+  if (rotate !== "0") {
+    args.push("-metadata:s:v:0");
+    args.push("rotate=" + rotate);
+  }
+
   args.push("-shortest");
   args.push("-y");
 
@@ -286,7 +347,7 @@ function create_video() {
     return false;
   }
 
-  cleanup(files);
+  //cleanup(files);
 
   // keep for now
   if (upload_video("/tmp/remcopy.mp4")) {
@@ -352,6 +413,14 @@ function main() {
     youtubeurls.push(youtubeurl);
 
     fullversion = process.argv[i + 1];
+
+    if (process.argv[i + 2]) {
+      if (process.argv[i + 2].match(/^-?[0-9]+$/) && rotate === "0") {
+        rotate = process.argv[i + 2];
+      } else {
+        rotate = "0";
+      }
+    }
   }
 
   if (!fullversion.match(/^https?:\/\//)) {
@@ -360,6 +429,9 @@ function main() {
   }
 
   parse_feeds.parse_feeds().then((members) => {
+    if (!get_init_offset(videofile))
+      return;
+
     var parse_youtubeurl = function(i) {
       var youtubeurl = youtubeurls[i];
 

@@ -187,9 +187,9 @@ function upload_video_yt(options) {
         console.log(number);
         if (number !== result.snippet.title) {
           base_request.resource.snippet.title = base_request.resource.snippet.title
-            .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " " + number + " $1");
+            .replace(/(?: [0-9]+)? (\[[0-9]+\] *)$/, " " + number + " $1");
           base_request.resource.localizations["ko"].title = base_request.resource.localizations["ko"].title
-            .replace(/ [0-9]+$/, " " + number);
+            .replace(/(?: [0-9]+)?$/, " " + number);
         } else {
           base_request.resource.snippet.title = base_request.resource.snippet.title
             .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " $1");

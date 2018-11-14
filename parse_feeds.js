@@ -700,6 +700,14 @@ function parse_member(obj, options) {
       }
     }
 
+    if (options.group && in_nogroups(options.group)) {
+      member.nogroup = options.group;
+    }
+
+    if (options.category) {
+      member.category = options.category;
+    }
+
     if (options.ex) {
       member.ex = options.ex;
     }
@@ -742,6 +750,13 @@ function parse_member(obj, options) {
 
       upush(member.tags, member.group);
       upush(member.tags, member.group_roman);
+
+      var group_hangul = parse_hangul(member.group);
+      if (group_hangul instanceof Array) {
+        group_hangul.forEach((hangul) => {
+          upush(member.tags, hangul);
+        });
+      }
 
       var groupnick = get_user_nick(member.group);
       if (groupnick) {
@@ -1039,6 +1054,7 @@ function do_sns(site) {
   module.exports.toplevel_feeds[site] = toplevel;
 
   var groups = {};
+  var group_categories = {};
   for (var folder in toplevel) {
     if (typeof toplevel[folder] !== "object")
       continue;
@@ -1052,6 +1068,8 @@ function do_sns(site) {
     for (var group in toplevel[folder]) {
       if (typeof toplevel[folder][group] !== "object" || in_ignoregroups(group))
         continue;
+
+      group_categories[group] = folder;
 
       if (groups[group]) {
         for (var key in toplevel[folder][group]) {
@@ -1072,6 +1090,8 @@ function do_sns(site) {
       console.log(parse_hangul(group));
       console.log("---");*/
 
+    var category = group_categories[group];
+
     if (groups[group].$$parent) {
       var group_obj = groups[group];
       for (var member in group_obj) {
@@ -1086,7 +1106,7 @@ function do_sns(site) {
         if (member === "前") {
           var exes = flatten_obj(member_obj);
           for (var ex in exes) {
-            var options = {ex: true, group: groupname, groupcomment: groupcomment, site};
+            var options = {ex: true, group: groupname, groupcomment: groupcomment, site, category};
             if (exes[ex].parents.indexOf("잠정") >= 0) {
               options.haitus = true;
             }
@@ -1095,13 +1115,13 @@ function do_sns(site) {
         } else if (member === "가족") {
           var family = flatten_obj(member_obj);
           for (var f in family) {
-            members.push(parse_member(family[f].obj, {family: true, group: groupname, groupcomment: groupcomment, site}));
+            members.push(parse_member(family[f].obj, {family: true, group: groupname, groupcomment: groupcomment, site, category}));
           }
         }
-        members.push(parse_member(member_obj, {group: groupname, groupcomment: groupcomment, site}));
+        members.push(parse_member(member_obj, {group: groupname, groupcomment: groupcomment, site, category}));
       }
     } else {
-      members.push(parse_member(groups[group], {site}));
+      members.push(parse_member(groups[group], {site, category}));
     }
 
     //console.log("");
@@ -1163,92 +1183,11 @@ function parse_feeds_inner() {
   return new Promise((resolve, reject) => {
     Promise.all([read_feeds(), read_toml()]).then(
       () => {
-        if (true) {
-          do_sns("instagram");
-          do_sns("twitter");
-          do_sns("weibo");
+        do_sns("instagram");
+        do_sns("twitter");
+        do_sns("weibo");
 
-          resolve(module.exports.members);
-          return;
-        }
-
-        var obj = tree_to_object(feeds_json);
-        var toplevel = obj;
-        for (var i = 0; i < feeds_toml.general.igpath.length; i++) {
-          if (feeds_toml.general.igpath[i] in toplevel) {
-            toplevel = toplevel[feeds_toml.general.igpath[i]];
-          } else {
-            console.error("Unable to find path:" + feeds_toml.general.igpath[i]);
-            reject();
-            return;
-          }
-        }
-        module.exports.toplevel_feed = toplevel;
-        var instagram = toplevel;
-
-        var groups = {};
-        for (var folder in instagram) {
-          if (typeof instagram[folder] !== "object")
-            continue;
-
-          if (!feeds_toml.general.igcategories) {
-            if (!in_ignoregroups(folder))
-              groups[group] = instagram[folder];
-            continue;
-          }
-
-          for (var group in instagram[folder]) {
-            if (typeof instagram[folder][group] !== "object" || in_ignoregroups(group))
-              continue;
-            groups[group] = instagram[folder][group];
-          }
-        }
-
-        var members = [];
-
-        for (var group in groups) {
-          var groupname = group.replace(/ *#.*/, "");
-          /*console.log(group);
-            console.log(parse_hangul(group));
-            console.log("---");*/
-
-          if (groups[group].$$parent) {
-            var group_obj = groups[group];
-            for (var member in group_obj) {
-              var member_obj = group_obj[member];
-
-              if (member === "$$parent")
-                continue;
-
-              if (in_ignorefolders(member))
-                continue;
-
-              if (member === "前") {
-                var exes = flatten_obj(member_obj);
-                for (var ex in exes) {
-                  var options = {ex: true, group: groupname};
-                  if (exes[ex].parents.indexOf("잠정") >= 0) {
-                    options.haitus = true;
-                  }
-                  members.push(parse_member(exes[ex].obj, options));
-                }
-              } else if (member === "가족") {
-                var family = flatten_obj(member_obj);
-                for (var f in family) {
-                  members.push(parse_member(family[f].obj, {family: true, group: groupname}));
-                }
-              }
-              members.push(parse_member(member_obj, {group: groupname}));
-            }
-          } else {
-            members.push(parse_member(groups[group]));
-          }
-
-          //console.log("");
-        }
-
-        module.exports.members = members;
-        resolve(members);
+        resolve(module.exports.members);
       })
       .catch((e) => {
         console.dir(e);
