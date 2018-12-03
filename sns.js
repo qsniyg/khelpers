@@ -2075,6 +2075,10 @@ function update_reddit(filename) {
   if (namespace.format)
     format = namespace.format;
 
+  var post_style = "link";
+  if (namespace.post_style)
+    post_style = namespace.post_style;
+
   var title = format
       .replace(/%M/, prefix)
       .replace(/%m/, prefix.toLowerCase())
@@ -2105,20 +2109,37 @@ function update_reddit(filename) {
     password: reddit_password
   });
 
-  if (!titlelink) {
-    console.log("Need title link");
-    return;
-  } else {
-    console.log(titlelink);
-  }
-
   var subreddit = r.getSubreddit(reddit);
-  var submitted = subreddit
+
+  var text = newsplitted.join("\n");
+  var submitted;
+  if (post_style === "link") {
+    if (!titlelink) {
+      console.log("Need title link");
+      return;
+    } else {
+      // https://www.reddit.com/r/bugs/comments/a1exx5/instagram_thumbnails_dont_work_anymore/eas7vl8/
+      titlelink = titlelink.replace(/:\/\/www\.instagram\.com\//, "://instagram.com/");
+      console.log(titlelink);
+    }
+
+    submitted = subreddit
       .submitLink({
         title: title,
         url: titlelink
       });
-  var replied = submitted.reply(newsplitted.join("\n"));
+    var replied = submitted.reply(text);
+  } else if (post_style === "text") {
+    submitted = subreddit
+      .submitSelfpost({
+        title: title,
+        text: text
+      });
+  } else {
+    console.log("Unknown post_style: " + post_style);
+    return;
+  }
+
   try {
     submitted.approve();
   } catch (e) {
@@ -2816,7 +2837,7 @@ function main() {
           mcontent_orig[content[i].url].push(content[i]);
 
           var created = content[i].created_at;
-          if (content[i].title.indexOf("[DP] ") >= 0) {
+          if (content[i].title.indexOf("[DP] ") >= 0 && created < startdate.getTime()) {
             created = content[i].added_at;
           }
 
@@ -2862,7 +2883,7 @@ function main() {
           mcontent[content.url].push(content);
         }
 
-        console.log(newcontent.length + " (" + duplicates + " duplicates)");
+        console.log(newcontent.length + " (" + duplicates + " duplicates excluded)");
 
         var lastspace = true;
         var inword = false;

@@ -686,6 +686,7 @@ function parse_member(obj, options) {
     if (options.group && !in_nogroups(options.group)) {
       member.group = options.group;
       member.group_roman = parse_hangul_first(member.group);
+      member.group_romans = parse_hangul(member.group);
 
       if (member.group_roman.indexOf("NOUPLOAD") >= 0) {
         member.group_roman = strip(member.group_roman.replace(/ *NOUPLOAD$/, ""));

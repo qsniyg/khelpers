@@ -8,6 +8,7 @@ var child_process = require('child_process');
 
 var cut = [];
 var videofile = null;
+var fakevideofile = null;
 var youtubeurls = [];
 var fullversion = null;
 var rotate = "0";
@@ -366,7 +367,7 @@ function upload_video(filename) {
   pre_en = pre_en.replace("%U", fullversion);
   pre_kr = pre_kr.replace("%U", fullversion);
 
-  if (!run_process("node", ["youtubeul.js", videofile,
+  if (!run_process("node", ["youtubeul.js", fakevideofile,
                             "prepend=" + pre_en,
                             "prepend_kr=" + pre_kr,
                             "real=" + filename])) {
@@ -378,11 +379,12 @@ function upload_video(filename) {
 
 function main() {
   if (process.argv.length < 5) {
-    console.log("videofile youtubeurl [youtubeurl1] fullversion");
+    console.log("videofile [real=realvideofile] youtubeurl [youtubeurl1] fullversion");
     return;
   }
 
   videofile = process.argv[2];
+  fakevideofile = process.argv[2];
   youtubeurls = [];
   //fullversion = process.argv[4];
 
@@ -391,7 +393,13 @@ function main() {
     return;
   }
 
-  for (var i = 3; i < process.argv.length; i++) {
+  var startarg = 3;
+  if (process.argv[3].startsWith("real=")) {
+    videofile = process.argv[3].replace(/^[^=]*=/, "");
+    startarg++;
+  }
+
+  for (var i = startarg; i < process.argv.length; i++) {
     var youtubeurl = process.argv[i];
 
     if (!youtubeurl.match(/^https?:\/\//)) {

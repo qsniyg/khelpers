@@ -10,6 +10,7 @@ var moment = require('moment-timezone');
 var path = require('path');
 var mustache = require('mustache');
 mustache.escape = function(text) {return text;};
+var readlineSync = require('readline-sync');
 
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
@@ -183,6 +184,29 @@ function upload_video_yt(options) {
 
         console.dir(result);
 
+        if (reupload) {
+          var new_object = {
+            title: result.snippet.title,
+            title_korean: result.localizations["ko"].title,
+            description: result.snippet.description,
+            description_kr: result.localizations["ko"].description,
+            tags: result.snippet.tags,
+            file: options.filename,
+            privacy: "private",
+            youtube_id: null
+          };
+
+          console.dir(new_object);
+          if (!readlineSync.keyInYNStrict("Delete video on youtube")) {
+            process.exit();
+            return;
+          }
+
+          upload_video_yt(new_object);
+
+          return;
+        }
+
         var number = result.snippet.title.replace(/.* ([0-9]+) \[[0-9]+\][^a-zA-Z0-9]*$/, "$1");
         console.log(number);
         if (number !== result.snippet.title) {
@@ -297,6 +321,7 @@ function create_timestamp(date) {
 var dmupload = false;
 var ytupload = false;
 var noupload = false;
+var reupload = false;
 var youtubeid = null;
 var desc_prepend = "";
 var desc_prepend_kr = "";
@@ -332,12 +357,22 @@ function main() {
         desc_prepend_kr = argv[i].replace(/^[^=]*=/, "") + "\n\n";
       } else if (argv[i].indexOf("real=") === 0) {
         real_filename = argv[i].replace(/^[^=]*=/, "");
+      } else if (argv[i] === "reup") {
+        reupload = true;
       }
     }
   }
 
   if (desc_prepend && !desc_prepend_kr)
     desc_prepend_kr = desc_prepend;
+
+  if (reupload) {
+    upload_video_yt({
+      filename: real_filename,
+      youtube_id: youtubeid
+    });
+    return;
+  }
 
   var matchobj = filename.match(/\/instagram\/([^/]*)\/\(([^)]*)\)/);
   if (!matchobj) {
