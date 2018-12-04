@@ -50,7 +50,13 @@ function parse_msg(text) {
   };
 }
 
-var users = {};
+async function get_sent_message(messageid) {
+  var message = await db_messages.find({messageid});
+  if (!message || message.length === 0)
+    return null;
+
+  return message[0];
+}
 
 function upush(array, item) {
   if (item === undefined)
@@ -136,6 +142,14 @@ async function send_channel(guildid, channelid, text, properties) {
   db_messages.insert(properties);
 
   return message;
+}
+
+async function find_account_by_id(account_id) {
+  var account = await db_accounts.find({account_id});
+  if (!account || account.length === 0)
+    return null;
+
+  return account[0];
 }
 
 function find_account(properties) {
@@ -521,16 +535,28 @@ function remove_rule(rule_id) {
 }
 
 async function get_rules_for_account(account, replay) {
+  orquery = [
+    {star_id: sanitize_id(account.star_id)},
+    {account_id: sanitize_id(account.account_id)},
+    {all: true}
+  ];
+
+  orquery1 = [];
+
+  if (!replay) {
+    orquery1.push({replays: true});
+    orquery1.push({replays: false});
+  } else {
+    orquery1.push({replays: true});
+    orquery1.push({replays: "only"});
+  }
+
   var query = {
-    "$or": [
-      {star_id: sanitize_id(account.star_id)},
-      {account_id: sanitize_id(account.account_id)},
-      {all: true}
+    "$and": [
+      {"$or": orquery},
+      {"$or": orquery1}
     ]
   };
-
-  if (replay)
-    query.replays = true;
 
   var rules = await db_rules.find(query);
 
@@ -630,13 +656,6 @@ async function subscribe_user(userid, account, replays) {
   await create_rule(options);
 
   senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**");
-  return;
-
-  if (is_subscribed(userid, account))
-    return;
-
-  do_subunsub(userid, account, true);
-  senddm(userid, "Subscribed to **" + account.name + "**");
 }
 
 async function subscribe_channel(message, guild, channel_id, account, replays) {
@@ -657,14 +676,6 @@ async function unsubscribe(message, ruleid) {
   if (message) {
     message.reply("Removed rule **" + ruleid + "**");
   }
-
-  return;
-
-  if (!is_subscribed(userid, account))
-    return;
-
-  do_subunsub(userid, account, false);
-  senddm(userid, "Unsubscribed from **" + account.name + "**");
 }
 
 client.on('ready', () => {
@@ -751,7 +762,7 @@ client.on('message', async message => {
       longhelp: [
         "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
         "",
-        "If `replays` is true, it will also post when a replay is uploaded on Youtube.",
+        "If `replays` is `true`, it will also post when a replay is uploaded on Youtube. Setting `replays` to `only` will only post replays.",
         "",
         "Examples:",
         "",
@@ -783,7 +794,7 @@ client.on('message', async message => {
       "",
       "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
       "",
-      "If `replays` is true, it will also post when a replay is uploaded on Youtube.",
+      "If `replays` is true, it will also post when a replay is uploaded on Youtube. Setting `replays` to `only` will only post replays.",
       "",
       "Examples:",
       "",
@@ -835,11 +846,15 @@ client.on('message', async message => {
     var replays = is_user ? args[2] : args[3];
 
     if (replays !== "true" &&
-        replays !== "false") {
-      return message.reply("The `replays` argument needs to be either `true` or `false`");
+        replays !== "false" &&
+        replays !== "only") {
+      return message.reply("The `replays` argument needs to be one of `true`, `false`, or `only`");
     }
 
-    replays = replays === "true";
+    if (replays === "true")
+      replays = true;
+    else if (replays === "false")
+      replays = false;
 
     var channel_id = null;
     if (!is_user) {
@@ -971,7 +986,15 @@ client.on('message', async message => {
           }
         }
 
-        text += " on `" + channel_name + "`";
+        text += " on `#" + channel_name + "`";
+      }
+
+      if (rule.replays === true) {
+        text += " (with replays)";
+      } else if (rule.replays === "only") {
+        text += " (only replays)";
+      } else if (rule.replays === false) {
+        text += " (no replays)";
       }
 
       message_text += text + "\n";
@@ -1009,30 +1032,43 @@ client.on('raw', async function(event) {
               emoji !== unsubscribe_emoji)
             return;
 
-          var parsed = parse_msg(message.content);
-          console.log(parsed);
+          //var parsed = parse_msg(message.content);
+          //console.log(parsed);
+          var sent_message = get_sent_message(event.d.message_id);
 
-          var account = await find_account(parsed);
+          if (sent_message.type !== "live" &&
+              sent_message.type !== "replay")
+            return;
+
+          var account = await find_account_by_id(sent_message.account);
           if (!account)
             return;
 
-          var star = await find_star(parsed);
+          var star = await find_star_by_id(account.star_id);
+          if (!star)
+            return;
 
-          console.log(account);
+          //console.log(account);
           if (event.d.emoji.name === subscribe_emoji) {
-            if (star)
-              subscribe_user(event.d.user_id, star, true);
-            else
-              subscribe_user(event.d.user_id, account, true);
+            if (sent_message.type === "live")
+              subscribe_user(event.d.user_id, star, false);
+            else if (sent_message.type === "replay")
+              subscribe_user(event.d.user_id, star, "only");
             //console.log("sub");
           } else if (event.d.emoji.name === unsubscribe_emoji) {
             //unsubscribe(event.d.user_id, parsed);
             var rules = await get_rules_for_user_account(event.d.user_id, account);
             if (rules && rules.length > 0) {
               rules.forEach(rule => {
-                remove_rule(rule.rule_id);
+                if (sent_message.type === "live") {
+                  if (rule.replays === true || rule.replays === false)
+                    remove_rule(rule.rule_id);
+                } else if (sent_message.type === "replay") {
+                  if (rule.replays === true || rule.replays === "only")
+                    remove_rule(rule.rule_id);
+                }
               });
-              senddm(event.d.user_id, "Unsubscribed from **" + parsed.name + "**");
+              senddm(event.d.user_id, "Unsubscribed from **" + parsed.name + "**'s " + sent_message.type + "s");
             }
             //console.log("unsub");
           }
@@ -1047,17 +1083,18 @@ client.on('raw', async function(event) {
 });
 
 async function send_message(body) {
-  if (body.type === "live") {
-    var sitename = "";
-    switch (body.site) {
-    case "instagram":
-      sitename = "Instagram";
-      break;
-    case "periscope":
-      sitename = "Periscope";
-      break;
-    }
+  var sitename = "";
+  switch (body.site) {
+  case "instagram":
+    sitename = "Instagram";
+    break;
+  case "periscope":
+    sitename = "Periscope";
+    break;
+  }
 
+  if (body.type === "live" ||
+      body.type === "replay") {
     var noupload_msg = "";
     if (true) {
       if (body.noupload || body.group_noupload) {
@@ -1065,12 +1102,20 @@ async function send_message(body) {
       }
     }
 
-    var message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
-    var subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future lives by this person*";
-    var unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe from future lives by this person*";
+    var message_text, subscribe_msb, unsubscribe_msg;
+
+    if (body.type === "live") {
+      message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
+      subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future lives by this person*";
+      unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe from future lives by this person*";
+    } else if (body.type === "replay") {
+      message_text = "Replay of **" + body.name + "**'s " + sitename + " livestream\n\n" + body.broadcast_guid + "\n\n";
+      subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future replays by this person*";
+      unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe to future replays by this person*";
+    }
 
     var account = await find_account(body);
-    var rules = await get_rules_for_account(account, false);
+    var rules = await get_rules_for_account(account, body.type === "replay");
 
     rules.forEach(async rule => {
       if (rule.created_at > body.date) {
@@ -1079,7 +1124,7 @@ async function send_message(body) {
       }
 
       var properties = {
-        type: "live",
+        type: body.type,
         account: account.account_id,
         star: account.star_id,
         site: body.site,
@@ -1087,7 +1132,7 @@ async function send_message(body) {
       };
 
       var query = {
-        type: "live",
+        type: body.type,
         site: body.site,
         broadcast_guid: body.broadcast_guid
       };

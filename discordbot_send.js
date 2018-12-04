@@ -2,6 +2,10 @@ var parse_feeds = null;
 var request = null;
 var fs = require('fs');
 
+const config = require('dotenv').config({
+  path: __dirname + "/.env"
+});
+
 function is_member_account(member, id, site) {
   if (!member || !member.accounts)
     return false;
@@ -112,7 +116,7 @@ function main(members, options) {
     //console.log(member);
     var properties = get_properties(account);
     var result = {
-      type: "live",
+      type: options.type,
       site: options.site,
       username: account.username,
       //member_type: "group_member",
@@ -134,6 +138,10 @@ function main(members, options) {
       result.uid = properties.uid;
     }
 
+    if (options.video_title) {
+      result.video_title = options.video_title;
+    }
+
     //console.log(result);
 
     request.post({
@@ -142,6 +150,74 @@ function main(members, options) {
       json: result
     });
   }
+}
+
+function start_add(items) {
+  if (items.length === 0)
+    return;
+
+  parse_feeds = require('./parse_feeds');
+  request = require('request');
+
+  parse_feeds.parse_feeds().then((members) => {
+    for (var i = 0; i < items.length; i++) {
+      main(members, items[i]);
+    }
+  });
+}
+
+function process_lives(parsed) {
+  var lives = [];
+  for (var i = 0; i < parsed.entries.length; i++) {
+    var entry = parsed.entries[i];
+    if (entry.caption !== "[LIVE]")
+      continue;
+
+    var guid = entry.url.match(/^https?:\/\/guid\.instagram\.com\/([0-9]+_[0-9]+)$/);
+    if (!guid)
+      continue;
+    guid = guid[1];
+
+    lives.push({
+      type: "live",
+      guid,
+      site: "instagram",
+      username: entry.author,
+      time: entry.date * 1000
+    });
+  }
+
+  start_add(lives);
+}
+
+function process_replays(parsed) {
+  //console.log(parsed);
+  var replays = [];
+
+  for (var i = 0; i < parsed.entries.length; i++) {
+    var entry = parsed.entries[i];
+
+    if (!entry.caption.match(/Instagram Live *[0-9]* *\[[0-9]{6}\] *$/)) {
+      continue;
+    }
+
+    var username = entry.description.match(/^Instagram: https?:\/\/[^/]*\/([^/]*)\/? *$/m);
+    if (!username)
+      continue;
+
+    username = username[1];
+
+    replays.push({
+      type: "replay",
+      guid: entry.url,
+      site: "instagram",
+      username: username,
+      time: entry.date * 1000,
+      video_title: entry.caption
+    });
+  }
+
+  start_add(replays);
 }
 
 function start() {
@@ -157,88 +233,17 @@ function start() {
     return;
   }
 
-  if (parsed.url !== "https://reelstray.instagram.com/")
-    return;
+  if (parsed.url === "https://reelstray.instagram.com/") {
+    return process_lives(parsed);
+  }
+
+  if (parsed.config.fullpath.startsWith("/f/youtube/playlist/" + config.parsed.YOUTUBE_PLAYLIST_ID)) {
+    return process_replays(parsed);
+  }
 
   //console.log(parsed);
 
-  var lives = [];
-  for (var i = 0; i < parsed.entries.length; i++) {
-    var entry = parsed.entries[i];
-    if (entry.caption !== "[LIVE]")
-      continue;
 
-    var guid = entry.url.match(/^https?:\/\/guid\.instagram\.com\/([0-9]+_[0-9]+)$/);
-    if (!guid)
-      continue;
-    guid = guid[1];
-
-    lives.push({
-      guid,
-      site: "instagram",
-      username: entry.author,
-      time: entry.date * 1000
-    });
-  }
-
-  if (lives.length === 0)
-    return;
-
-  parse_feeds = require('./parse_feeds');
-  request = require('request');
-
-  parse_feeds.parse_feeds().then((members) => {
-    /*var member_name = process.argv[2];
-    //var site = process.argv[3] || "instagram";
-    var site = "instagram";
-    var guid = process.argv[3];*/
-
-    for (var i = 0; i < lives.length; i++) {
-      main(members, lives[i]);
-    }
-    return;
-    if (!guid)
-      return;
-
-    for (var i = 0; i < members.length; i++) {
-      var member = members[i];
-      var account = null;
-      if (!member || !(account = is_member_account(member, member_name, site)) || !can_share(member, account))
-        continue;
-
-      console.log(member);
-      var properties = get_properties(account);
-      var result = {
-        type: "live",
-        site,
-        username: account.username,
-        member_type: "group_member",
-        group: member.group_romans,
-        group_kr: member.group,
-        profile_link: account.link,
-        watch_link: account.link,
-        name: member.title,
-        name_kr: member.title_kr,
-        member_name: member.member_name,
-        member_name_kr: member.member_name_kr,
-        noupload: member.noupload,
-        group_noupload: member.group_noupload,
-        broadcast_guid: guid
-      };
-
-      if (properties) {
-        result.uid = properties.uid;
-      }
-
-      console.log(result);
-
-      request.post({
-        uri: 'http://localhost:8456/add',
-        method: 'POST',
-        json: result
-      });
-    }
-  });
 }
 
 start();
