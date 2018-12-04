@@ -923,7 +923,7 @@ function parse_member(obj, options) {
       title += member.alt;
   }
 
-  member.title = title;
+  member.title = strip(title);
 
   var title_kr = "";
   if (member.group) {

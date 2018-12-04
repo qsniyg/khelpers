@@ -1,5 +1,6 @@
-var parse_feeds = require('./parse_feeds');
-var request = require('request');
+var parse_feeds = null;
+var request = null;
+var fs = require('fs');
 
 function is_member_account(member, id, site) {
   if (!member || !member.accounts)
@@ -18,11 +19,11 @@ function is_member_account(member, id, site) {
   return false;
 }
 
-var followers_low = 5000;
+var followers_low = 4000;
 var followers_high = 2*1000*1000;
 
 var time_low = 2*60*60*1000;
-var time_high = 48*60*60*1000;
+var time_high = 7*24*60*60*1000;
 
 function interpolate(value_low, value_high, input_low, input_high, input) {
   input = Math.max(0, input - input_low);
@@ -88,23 +89,33 @@ function can_share(member, account) {
   return false;
 }
 
-parse_feeds.parse_feeds().then((members) => {
-  var member_name = process.argv[2];
-  var site = process.argv[3] || "instagram";
+/*process.stdin.setEncoding('utf8');
+var input_chunks = [];
+
+process.stdin.on('readable', function() {
+  const chunk = process.stdin.read();
+  if (chunk !== null)
+    input_chunks.push(chunk);
+});*/
+
+function main(members, options) {
+  var username = options.username;
+  var guid = options.guid;
+  var site = options.site;
 
   for (var i = 0; i < members.length; i++) {
     var member = members[i];
     var account = null;
-    if (!member || !(account = is_member_account(member, member_name, site)) || !can_share(member, account))
+    if (!member || !(account = is_member_account(member, username, site)) || !can_share(member, account))
       continue;
 
-    console.log(member);
+    //console.log(member);
     var properties = get_properties(account);
     var result = {
       type: "live",
-      site,
+      site: options.site,
       username: account.username,
-      member_type: "group_member",
+      //member_type: "group_member",
       group: member.group_romans,
       group_kr: member.group,
       profile_link: account.link,
@@ -114,14 +125,16 @@ parse_feeds.parse_feeds().then((members) => {
       member_name: member.member_name,
       member_name_kr: member.member_name_kr,
       noupload: member.noupload,
-      group_noupload: member.group_noupload
+      group_noupload: member.group_noupload,
+      broadcast_guid: guid,
+      date: options.time
     };
 
     if (properties) {
       result.uid = properties.uid;
     }
 
-    console.log(result);
+    //console.log(result);
 
     request.post({
       uri: 'http://localhost:8456/add',
@@ -129,4 +142,103 @@ parse_feeds.parse_feeds().then((members) => {
       json: result
     });
   }
-});
+}
+
+function start() {
+  var input = fs.readFileSync('/dev/stdin').toString();
+
+//process.stdin.on('end', function() {
+  //var input = input_chunks.join();
+
+  var parsed;
+  try {
+    parsed = JSON.parse(input);
+  } catch (e) {
+    return;
+  }
+
+  if (parsed.url !== "https://reelstray.instagram.com/")
+    return;
+
+  //console.log(parsed);
+
+  var lives = [];
+  for (var i = 0; i < parsed.entries.length; i++) {
+    var entry = parsed.entries[i];
+    if (entry.caption !== "[LIVE]")
+      continue;
+
+    var guid = entry.url.match(/^https?:\/\/guid\.instagram\.com\/([0-9]+_[0-9]+)$/);
+    if (!guid)
+      continue;
+    guid = guid[1];
+
+    lives.push({
+      guid,
+      site: "instagram",
+      username: entry.author,
+      time: entry.date * 1000
+    });
+  }
+
+  if (lives.length === 0)
+    return;
+
+  parse_feeds = require('./parse_feeds');
+  request = require('request');
+
+  parse_feeds.parse_feeds().then((members) => {
+    /*var member_name = process.argv[2];
+    //var site = process.argv[3] || "instagram";
+    var site = "instagram";
+    var guid = process.argv[3];*/
+
+    for (var i = 0; i < lives.length; i++) {
+      main(members, lives[i]);
+    }
+    return;
+    if (!guid)
+      return;
+
+    for (var i = 0; i < members.length; i++) {
+      var member = members[i];
+      var account = null;
+      if (!member || !(account = is_member_account(member, member_name, site)) || !can_share(member, account))
+        continue;
+
+      console.log(member);
+      var properties = get_properties(account);
+      var result = {
+        type: "live",
+        site,
+        username: account.username,
+        member_type: "group_member",
+        group: member.group_romans,
+        group_kr: member.group,
+        profile_link: account.link,
+        watch_link: account.link,
+        name: member.title,
+        name_kr: member.title_kr,
+        member_name: member.member_name,
+        member_name_kr: member.member_name_kr,
+        noupload: member.noupload,
+        group_noupload: member.group_noupload,
+        broadcast_guid: guid
+      };
+
+      if (properties) {
+        result.uid = properties.uid;
+      }
+
+      console.log(result);
+
+      request.post({
+        uri: 'http://localhost:8456/add',
+        method: 'POST',
+        json: result
+      });
+    }
+  });
+}
+
+start();

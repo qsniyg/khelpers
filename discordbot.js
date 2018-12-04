@@ -7,6 +7,12 @@ var db = monk("localhost/live_discord?auto_reconnect=true");
 var db_stars = db.get("stars");
 var db_accounts = db.get("accounts");
 var db_rules = db.get("rules");
+var db_messages = db.get("messages");
+
+//db_stars.remove({});
+//db_accounts.remove({});
+//db_rules.remove({});
+//db_messages.remove({});
 
 if (false) {
   db_rules.find({}).then(
@@ -77,43 +83,29 @@ function uremove(array, item) {
   }
 }
 
-function do_subunsub(userid, account, subscribe) {
-  var subscribed = is_subscribed(userid, account);
-  if (subscribe && subscribed ||
-      !subscribe && !subscribed)
-    return;
+function init_message(properties, text, message) {
+  if (!properties)
+    properties = {type: "other"};
 
-  if (!(userid in users)) {
-    users[userid] = {
-      subbed_titles: [],
-      subbed_accounts: [],
-      //unsubbed_titles: [],
-      //unsubbed_accounts: []
-    };
-  }
+  properties.created_at = Date.now();
+  properties.text = text;
+  properties.messageid = message.id;
 
-  var titles_list = users[userid].subbed_titles;
-  var accounts_list = users[userid].subbed_accounts;
-  var site_username = account.site + "/" + account.username;
-  if (subscribe) {
-    //titles_list = users[userid].unsubbed_titles;
-    //accounts_list = users[userid].unsubbed_accounts;
-    upush(titles_list, account.name);
-    upush(accounts_list, site_username);
-  } else {
-    uremove(titles_list, account.name);
-    uremove(accounts_list, site_username);
-  }
-
-  console.log(users[userid]);
+  return properties;
 }
 
-function senddm(userid, text) {
+function senddm(userid, text, properties) {
   return new Promise((resolve, reject) => {
     client.fetchUser(userid).then(
       user => {
         user.send(text).then(
-          message => resolve(message),
+          message => {
+            properties = init_message(properties, text, message);
+            properties.user = userid;
+            db_messages.insert(properties);
+
+            resolve(message);
+          },
           error => reject(error)
         );
       },
@@ -123,6 +115,27 @@ function senddm(userid, text) {
       }
     );
   });
+}
+
+async function send_channel(guildid, channelid, text, properties) {
+  var guild = client.guilds.get(guildid);
+  if (!guild) {
+    return null;
+  }
+
+  var channel = guild.channels.get(channelid);
+  if (!channel) {
+    return null;
+  }
+
+  var message = await channel.send(text);
+  properties = init_message(properties, text, message);
+  properties.guild = guildid;
+  properties.channel = channelid;
+
+  db_messages.insert(properties);
+
+  return message;
 }
 
 function find_account(properties) {
@@ -440,7 +453,8 @@ async function add_account(properties) {
     account = {
       site: properties.site,
       account_id: id,
-      star_id: star.star_id
+      star_id: star.star_id,
+      created_at: Date.now()
     };
 
     if (properties.uid) {
@@ -457,7 +471,8 @@ async function add_account(properties) {
     var id = await create_star_id();
 
     star = {
-      star_id: id
+      star_id: id,
+      created_at: Date.now()
     };
 
     await update_star(star, properties);
@@ -490,6 +505,10 @@ async function create_rule(options) {
 
   if (!options.rule_id) {
     options.rule_id = await create_rule_id();
+  }
+
+  if (!options.created_at) {
+    options.created_at = Date.now();
   }
 
   console.log(options);
@@ -881,7 +900,15 @@ client.on('message', async message => {
       return message.reply("Invalid `rule_id`");
     }
 
-    var rule = await db_rules.find({rule: rule_id});
+    var query = {rule: rule_id};
+
+    if (is_user) {
+      query.user = message.author.id;
+    } else {
+      query.guild = message.guild.id;
+    }
+
+    var rule = await db_rules.find();
     if (!rule) {
       return message.reply("Rule " + rule_id + " does not exist");
     }
@@ -1046,21 +1073,43 @@ async function send_message(body) {
     var rules = await get_rules_for_account(account, false);
 
     rules.forEach(async rule => {
+      if (rule.created_at > body.date) {
+        //console.log((rule.created_at - body.date) / 1000);
+        return;
+      }
+
+      var properties = {
+        type: "live",
+        account: account.account_id,
+        star: account.star_id,
+        site: body.site,
+        broadcast_guid: body.broadcast_guid
+      };
+
+      var query = {
+        type: "live",
+        site: body.site,
+        broadcast_guid: body.broadcast_guid
+      };
+
       if (rule.user) {
-        var message = await senddm(rule.user, message_text + unsubscribe_msg);
+        query.user = rule.user;
+        var already_messaged = await db_messages.find(query);
+        if (already_messaged && already_messaged.length > 0) {
+          return;
+        }
+
+        var message = await senddm(rule.user, message_text + unsubscribe_msg, properties);
         message.react(unsubscribe_emoji);
       } else if (rule.guild && rule.channel) {
-        var guild = client.guilds.get(rule.guild);
-        if (!guild) {
+        query.guild = rule.guild;
+        query.channel = rule.channel;
+        var already_messaged = await db_messages.find(query);
+        if (already_messaged && already_messaged.length > 0) {
           return;
         }
 
-        var channel = guild.channels.get(rule.channel);
-        if (!channel) {
-          return;
-        }
-
-        var message = await channel.send(message_text + subscribe_msg);
+        var message = await send_channel(rule.guild, rule.channel, message_text + subscribe_msg, properties);
         await message.react(subscribe_emoji);
         //await message.react(unsubscribe_emoji);
       }

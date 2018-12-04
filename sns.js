@@ -805,6 +805,11 @@ function replace_lines(filename, splitted, extra, album) {
     newtext = "https://imgur.com/a/" + album.data.id + " - images below as an album\n\n" + newtext;
   }
 
+  if (errors.length > 0) {
+    console.log("ERRORS:");
+    console.dir(errors);
+  }
+
   console.log(filename + "_mod");
   fs.writeFileSync(filename + "_mod", newtext);
   //spawn_editor(filename + "_mod");
@@ -2392,7 +2397,7 @@ function update_file_main(filename, splitted) {
         lastline = trim_text(line);
       });
 
-      if (errors.length >= 0) {
+      if (errors.length > 0) {
         console.log("ERRORS:");
         console.dir(errors);
       }
