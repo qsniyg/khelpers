@@ -887,7 +887,7 @@ client.on('message', async message => {
     } else {
       star = await find_star({search: star_search});
       if (!star) {
-        return message.reply("Unable to find `" + star_search + "`");
+        return message.reply("Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel to request a new account.");
       }
     }
 
@@ -1189,18 +1189,9 @@ fastify.post('/add', (request, reply) => {
     //console.log(request.body);
     add_account(request.body).then(
       account => {
-        send_message(request.body);
-        return;
-        find_star_by_id(account.star_id).then(
-          star => {
-            console.log(star);
-          }
-        );
-        get_star_accounts(account.star_id).then(
-          accounts => {
-            console.log(accounts);
-          }
-        );
+        if (request.body.type !== "account") {
+          send_message(request.body);
+        }
       }
     );
 

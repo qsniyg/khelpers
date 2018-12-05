@@ -104,7 +104,6 @@ process.stdin.on('readable', function() {
 
 function main(members, options) {
   var username = options.username;
-  var guid = options.guid;
   var site = options.site;
 
   for (var i = 0; i < members.length; i++) {
@@ -129,10 +128,16 @@ function main(members, options) {
       member_name: member.member_name,
       member_name_kr: member.member_name_kr,
       noupload: member.noupload,
-      group_noupload: member.group_noupload,
-      broadcast_guid: guid,
-      date: options.time
+      group_noupload: member.group_noupload
     };
+
+    if (options.guid) {
+      result.broadcast_guid = options.guid;
+    }
+
+    if (options.time) {
+      result.date = options.time;
+    }
 
     if (properties) {
       result.uid = properties.uid;
@@ -152,17 +157,27 @@ function main(members, options) {
   }
 }
 
+function init_main(cb) {
+  if (!parse_feeds)
+    parse_feeds = require('./parse_feeds');
+  if (!request)
+    request = require('request');
+
+  parse_feeds.parse_feeds().then(cb);
+}
+
+function do_main_loop(members, items) {
+  for (var i = 0; i < items.length; i++) {
+    main(members, items[i]);
+  }
+}
+
 function start_add(items) {
   if (items.length === 0)
     return;
 
-  parse_feeds = require('./parse_feeds');
-  request = require('request');
-
-  parse_feeds.parse_feeds().then((members) => {
-    for (var i = 0; i < items.length; i++) {
-      main(members, items[i]);
-    }
+  init_main((members) => {
+    do_main_loop(members, items);
   });
 }
 
@@ -220,7 +235,59 @@ function process_replays(parsed) {
   start_add(replays);
 }
 
+function process_add_account() {
+  if (process.argv.length < 4)
+    return;
+
+  var accountname = process.argv[3];
+  if (!accountname)
+    return;
+
+  var readlineSync = require('readline-sync');
+
+  init_main((members) => {
+    var accounts = [];
+
+    for (var i = 0; i < members.length; i++) {
+      var member = members[i];
+      if (!member)
+        continue;
+
+      if (member.group !== accountname)
+        continue;
+
+      for (var j = 0; j < member.accounts.length; j++) {
+        var account = member.accounts[j];
+
+        if (account.site !== "instagram")
+          continue;
+
+        var text = member.title + " @" + account.username;
+        if (readlineSync.keyInYNStrict(text)) {
+          accounts.push({
+            type: "account",
+            site: "instagram",
+            username: account.username
+          });
+        }
+      }
+    }
+
+    console.log(accounts);
+    if (!readlineSync.keyInYNStrict("Is this acceptable?")) {
+      return;
+    }
+
+    do_main_loop(members, accounts);
+  });
+}
+
 function start() {
+  if (process.argv.length > 2 && process.argv[2] === "account") {
+    process_add_account();
+    return;
+  }
+
   var input = fs.readFileSync('/dev/stdin').toString();
 
 //process.stdin.on('end', function() {
