@@ -282,10 +282,44 @@ function process_add_account() {
   });
 }
 
-function start() {
-  if (process.argv.length > 2 && process.argv[2] === "account") {
-    process_add_account();
+function process_accept_guild() {
+  request = require('request');
+
+  var action = null;
+
+  if (!process.argv[3] || !process.argv[4] || !process.argv[4].match(/^[0-9]+$/))
     return;
+
+  if (process.argv[3] === "whitelist") {
+    action = {
+      type: "whitelist",
+      guild_id: process.argv[4]
+    };
+  } else if (process.argv[3] === "blacklist") {
+    action = {
+      type: "blacklist",
+      guild_id: process.argv[4]
+    };
+  }
+
+  if (action) {
+    request.post({
+      uri: 'http://localhost:8456/guild',
+      method: 'POST',
+      json: action
+    });
+  }
+}
+
+function start() {
+  if (process.argv.length > 2) {
+    if (process.argv[2] === "account") {
+      process_add_account();
+      return;
+    } else if (process.argv[2] === "guild") {
+      process_accept_guild();
+      return;
+    }
   }
 
   var input = fs.readFileSync('/dev/stdin').toString();

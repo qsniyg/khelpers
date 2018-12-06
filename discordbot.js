@@ -8,11 +8,13 @@ var db_stars = db.get("stars");
 var db_accounts = db.get("accounts");
 var db_rules = db.get("rules");
 var db_messages = db.get("messages");
+var db_guilds = db.get("guilds");
 
 //db_stars.remove({});
 //db_accounts.remove({});
 //db_rules.remove({});
 //db_messages.remove({});
+//db_guilds.remove({});
 
 if (false) {
   db_rules.find({}).then(
@@ -22,10 +24,12 @@ if (false) {
   );
 }
 
+var bot_guild;
 var self_userid;
 
 var subscribe_emoji = '✉';
 var unsubscribe_emoji = '❌';
+var dm_helptext = "\n\n*Type `help` for a list of commands*";
 
 function parse_msg(text) {
   if (!text.match(/^\*\*.*?\*\* is live on .*\nhttps?:\/\//))
@@ -294,8 +298,12 @@ function create_search(properties) {
   }
 
   if ("group" in properties && "member_name" in properties) {
-    for (var i = 0; i < properties.group.length; i++) {
-      search.push(properties.group[i] + " " + properties.member_name);
+    if (properties.group instanceof Array) {
+      for (var i = 0; i < properties.group.length; i++) {
+        search.push(properties.group[i] + " " + properties.member_name);
+      }
+    } else {
+      search.push(properties.group + " " + properties.member_name);
     }
   }
 
@@ -655,19 +663,28 @@ async function subscribe_user(userid, account, replays) {
 
   await create_rule(options);
 
-  senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**");
+  senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
 }
 
-async function subscribe_channel(message, guild, channel_id, account, replays) {
+async function subscribe_channel(message, guild, channel_id, account, replays, pings) {
   var options = base_rule(account, replays);
   options.guild = guild;
   options.channel = channel_id;
+  options.ping_roles = pings;
 
   await create_rule(options);
 
   if (message) {
     message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
   }
+}
+
+function discord_invite_msg(userid) {
+  if (!bot_guild.members.get(userid)) {
+    return "*Join the LiveBot server here: " + config.parsed.DISCORD_INVITE_LINK + "*";
+  }
+
+  return "";
 }
 
 async function unsubscribe(message, ruleid) {
@@ -680,12 +697,39 @@ async function unsubscribe(message, ruleid) {
 
 client.on('ready', () => {
   self_userid = client.user.id;
+  bot_guild = client.guilds.get(config.parsed.DISCORD_GUILD_ID);
+  if (!bot_guild) {
+    console.log("Bot guild is missing?");
+  }
 
   console.log("Discord ready");
 });
 
+async function check_accepted_guild(guild) {
+  if (guild.id === config.parsed.DISCORD_GUILD_ID)
+    return true;
+
+  var guild_ok = await db_guilds.find({
+    guild_id: guild.id,
+    ok: true
+  });
+
+  if (!guild_ok || guild_ok.length === 0) {
+    console.log("Guild " + guild.id + " is not whitelisted, leaving");
+    guild.leave();
+    return false;
+  }
+
+  return true;
+}
+
+client.on('guildCreate', guild => {
+  check_accepted_guild(guild);
+});
+
 client.on('message', async message => {
-  if (message.author.id === self_userid)
+  if (message.author.id === self_userid ||
+      message.author.bot)
     return;
 
   var msg = message.content
@@ -757,7 +801,7 @@ client.on('message', async message => {
     },
     "subscribe": {
       emoji: subscribe_emoji,
-      sample_args: "[group and member name] [replays]",
+      sample_args: "group_and_member_name replays",
       shorthelp: "Subscribes yourself to a person's lives",
       longhelp: [
         "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
@@ -774,7 +818,7 @@ client.on('message', async message => {
     },
     "unsubscribe": {
       emoji: unsubscribe_emoji,
-      sample_args: "[rule_id]",
+      sample_args: "rule_id",
       shorthelp: "Removes a subscription",
       longhelp: [
         "The `rule_id` can be found using the `list` command",
@@ -787,20 +831,23 @@ client.on('message', async message => {
   };
 
   if (!is_user) {
-    commands.subscribe.sample_args = "[channel_id] [group and member name] [replays]";
+    commands.subscribe.sample_args = "channel_id group_and_member_name replays [ping_role_id]";
     commands.subscribe.shorthelp = "Subscribes a channel to a person's lives";
     commands.subscribe.longhelp = [
       "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'",
       "",
-      "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
+      "The `group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
       "",
       "If `replays` is true, it will also post when a replay is uploaded on Youtube. Setting `replays` to `only` will only post replays.",
       "",
+      "`ping_role_id` is optional, but if specified, the specified role will be pinged.",
+      "    To find the role ID, make sure the rule can be pinged, and write `\\@rolename`. After sending, if the message is `<@&12345>`, the role ID is `12345`.",
+      "",
       "Examples:",
       "",
-      "       `subscribe 123456 'snsd taeyeon' true`",
+      "       `subscribe 123456 'snsd taeyeon' true 7890`",
       "       `subscribe 123456 \"girl's generation taeyeon\" true`",
-      "       `subscribe 123456 \"Girls Generation Taeyeon\" true`",
+      "       `subscribe 123456 \"Girls Generation Taeyeon\" true 7890`",
       "       `subscribe 123456 '소녀시대 태연' true`",
     ].join("\n");
   }
@@ -835,12 +882,15 @@ client.on('message', async message => {
 
       reply += text;
     }
+
+    reply += discord_invite_msg(message.author.id);
+
     message.reply(reply);
     break;
   case "subscribe":
     arglength = is_user ? 3 : 4;
-    if (args.length !== arglength) {
-      return message.reply("Needs " + arglength + " arguments (use the `help` command for more information)");
+    if (args.length < arglength) {
+      return message.reply("Needs at least " + arglength + " arguments (use the `help` command for more information)");
     }
 
     var replays = is_user ? args[2] : args[3];
@@ -879,6 +929,33 @@ client.on('message', async message => {
       }
     }
 
+    var pings = [];
+    if (!is_user) {
+      if (args.length > 4 && args[4]) {
+        var ok = false;
+        var ping = null;
+        try {
+          ping = sanitize_id(args[4]);
+          if (ping)
+            ok = true;
+        } catch (e) {}
+
+        if (!ok) {
+          return message.reply("Invalid `role_id`");
+        }
+
+        if (!message.guild) {
+          return message.reply("Not in a guild? You shouldn't see this");
+        }
+
+        if (!message.guild.roles.get(ping)) {
+          return message.reply("Role ID '" + ping + "' does not exist");
+        }
+
+        pings.push(ping);
+      }
+    }
+
     var star_search = is_user ? args[1] : args[2];
 
     var star;
@@ -887,14 +964,20 @@ client.on('message', async message => {
     } else {
       star = await find_star({search: star_search});
       if (!star) {
-        return message.reply("Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel to request a new account.");
+        var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
+
+        var invite_msg = discord_invite_msg(message.author.id);
+        if (invite_msg)
+          text += "\n\n" + invite_msg;
+
+        return message.reply(text);
       }
     }
 
     if (is_user) {
       subscribe_user(message.author.id, star, replays);
     } else {
-      subscribe_channel(message, message.guild.id, channel_id, star, replays);
+      subscribe_channel(message, message.guild.id, channel_id, star, replays, pings);
     }
     break;
   case "unsubscribe":
@@ -975,6 +1058,7 @@ client.on('message', async message => {
       if (!is_user) {
         var channel_name = "";
         var guild = client.guilds.get(rule.guild);
+        var ping_text = "";
         if (!guild) {
           channel_name = "undefined guild";
         } else {
@@ -984,9 +1068,21 @@ client.on('message', async message => {
           } else {
             channel_name = channel.name;
           }
+
+          if (rule.ping_roles && rule.ping_roles.length > 0) {
+            ping_text += ", pings ";
+            for (var j = 0; j < rule.ping_roles.length; j++) {
+              var role = guild.roles.get(rule.ping_roles[j]);
+              var rolename = "undefined-role";
+              if (role) {
+                rolename = role.name;
+              }
+              ping_text += " `@" + rolename + "`";
+            }
+          }
         }
 
-        text += " on `#" + channel_name + "`";
+        text += " on `#" + channel_name + "`" + ping_text;
       }
 
       if (rule.replays === true) {
@@ -1034,7 +1130,7 @@ client.on('raw', async function(event) {
 
           //var parsed = parse_msg(message.content);
           //console.log(parsed);
-          var sent_message = get_sent_message(event.d.message_id);
+          var sent_message = await get_sent_message(event.d.message_id);
 
           if (sent_message.type !== "live" &&
               sent_message.type !== "replay")
@@ -1068,7 +1164,7 @@ client.on('raw', async function(event) {
                     remove_rule(rule.rule_id);
                 }
               });
-              senddm(event.d.user_id, "Unsubscribed from **" + parsed.name + "**'s " + sent_message.type + "s");
+              senddm(event.d.user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
             }
             //console.log("unsub");
           }
@@ -1123,6 +1219,17 @@ async function send_message(body) {
         return;
       }
 
+      var this_text = message_text;
+
+      if (rule.ping_roles && rule.ping_roles.length > 0) {
+        var ping_text = "";
+        for (var i = 0; i < rule.ping_roles.length; i++) {
+          ping_text += "<@&" + rule.ping_roles[i] + "> ";
+        }
+
+        this_text = ping_text + this_text;
+      }
+
       var properties = {
         type: body.type,
         account: account.account_id,
@@ -1144,7 +1251,7 @@ async function send_message(body) {
           return;
         }
 
-        var message = await senddm(rule.user, message_text + unsubscribe_msg, properties);
+        var message = await senddm(rule.user, this_text + unsubscribe_msg, properties);
         message.react(unsubscribe_emoji);
       } else if (rule.guild && rule.channel) {
         query.guild = rule.guild;
@@ -1154,7 +1261,7 @@ async function send_message(body) {
           return;
         }
 
-        var message = await send_channel(rule.guild, rule.channel, message_text + subscribe_msg, properties);
+        var message = await send_channel(rule.guild, rule.channel, this_text + subscribe_msg, properties);
         await message.react(subscribe_emoji);
         //await message.react(unsubscribe_emoji);
       }
@@ -1195,6 +1302,62 @@ fastify.post('/add', (request, reply) => {
       }
     );
 
+    reply.send({status: "ok"});
+  } catch (err) {
+    console.error(err);
+    reply.send({status: "not_ok"});
+  }
+});
+
+async function do_guild_white_blacklist(body) {
+  if (!body || !body.guild_id || !body.type) {
+    return;
+  }
+
+  if (body.type !== "whitelist" &&
+      body.type !== "blacklist")
+    return;
+
+  var ok = body.type === "whitelist";
+
+  var newobj = {
+    ok
+  };
+
+  if (!ok) {
+    newobj.reason = "admin_blacklist";
+  } else {
+    newobj.reason = "admin_whitelist";
+  }
+
+  var guilds = await db_guilds.find({guild_id: body.guild_id});
+  //console.log(guilds);
+  if (!guilds || guilds.length === 0) {
+    var obj = {
+      guild_id: body.guild_id
+    };
+
+    for (var prop in newobj) {
+      obj[prop] = newobj[prop];
+    }
+
+    console.log("Inserting guild rule", obj);
+    return db_guilds.insert(obj);
+  } else {
+    guilds.forEach(guild => {
+      for (var prop in newobj) {
+        guild[prop] = newobj[prop];
+      }
+
+      console.log("Updating guild rule", guild);
+      db_guilds.update(guild._id, guild);
+    });
+  }
+}
+
+fastify.post('/guild', (request, reply) => {
+  try {
+    do_guild_white_blacklist(request.body);
     reply.send({status: "ok"});
   } catch (err) {
     console.error(err);
