@@ -24,15 +24,22 @@ function is_member_account(member, id, site) {
 }
 
 var followers_low = 4000;
-var followers_high = 2*1000*1000;
+var followers_high = 1*1000*1000;
 
 var time_low = 2*60*60*1000;
-var time_high = 7*24*60*60*1000;
+var time_high = 14*24*60*60*1000;
+
+function sinterpolate(value) {
+  return (Math.sin(Math.pow(value, 2/6)*Math.PI - Math.PI/2) + 1) / 2;
+}
 
 function interpolate(value_low, value_high, input_low, input_high, input) {
   input = Math.max(0, input - input_low);
   var range = (input_high - input_low);
-  input = Math.min(1, Math.pow(input, 1/3) / Math.pow(range, 1/3));
+  //input = Math.min(1, Math.pow(input, 1/3) / Math.pow(range, 1/3));
+  //input = Math.min(1, Math.pow(input, 2) / Math.pow(range, 2));
+  input = Math.min(1, input / range);
+  input = sinterpolate(input);
 
   return value_low + (value_high - value_low) * (1 - input);
 }
@@ -77,16 +84,25 @@ function can_share(member, account) {
         return false;
 
       var delay = interpolate(time_low, time_high, followers_low, followers_high, followers);
-      var added_at = account.added_at;
+      if (isNaN(delay))
+        return false;
+
+      var added_at = account.obj.added_at;
+      //console.log(added_at);
       if (added_at) {
         var diff = Date.now() - added_at;
         if (diff <= time_low || diff < delay)
           return false;
       }
+
+      if (followers > 1000*1000)
+        return true;
     }
   }
 
-  if (member.group || member.nogroup === "가수") {
+  if ((member.group && member.category !== "외") ||
+      member.nogroup === "가수" ||
+      (member.category && member.category.startsWith("그룹"))) {
     return true;
   }
 
@@ -145,6 +161,14 @@ function main(members, options) {
 
     if (options.video_title) {
       result.video_title = options.video_title;
+    }
+
+    if (member.alt_groups) {
+      result.alt_groups = member.alt_groups;
+    }
+
+    if (member.alt_groups_roman) {
+      result.alt_groups_roman = member.alt_groups_roman;
     }
 
     //console.log(result);

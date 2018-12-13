@@ -2,7 +2,8 @@
 
 var google = require('googleapis');
 var google_oauth = require('./google_oauth');
-var parse_feeds = require('./parse_feeds');
+//var parse_feeds = require('./parse_feeds');
+var parse_feeds = null;
 var fs = require('fs');
 const notifier = require('node-notifier');
 var DMClient = require('dailymotion-sdk').client;
@@ -367,6 +368,7 @@ function main() {
     desc_prepend_kr = desc_prepend;
 
   if (reupload) {
+    parse_feeds = require('./parse_feeds');
     upload_video_yt({
       filename: real_filename,
       youtube_id: youtubeid
@@ -379,6 +381,8 @@ function main() {
     console.log("Not matched");
     return;
   }
+
+  parse_feeds = require('./parse_feeds');
 
   var username_str = matchobj[1].toLowerCase();
   var date_str = matchobj[2];

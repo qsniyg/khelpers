@@ -116,7 +116,21 @@ function senddm(userid, text, properties) {
 
             resolve(message);
           },
-          error => reject(error)
+          error => {
+            console.log("Failed to send message '" + text + "' to user " + userid);
+            console.dir(error);
+
+            if (error &&
+                error.name === "DiscordAPIError" &&
+                error.code === 50007) {
+              console.log("User " + userid + " blocked the bot, removing rules to preserve API limits");
+              db_rules.remove({
+                user: userid
+              });
+            }
+
+            reject(error);
+          }
         );
       },
       error => {
@@ -297,18 +311,48 @@ function create_search(properties) {
     search.push(properties.name_kr);
   }
 
-  if ("group" in properties && "member_name" in properties) {
-    if (properties.group instanceof Array) {
-      for (var i = 0; i < properties.group.length; i++) {
-        search.push(properties.group[i] + " " + properties.member_name);
+  if ("member_name" in properties) {
+    if ("group" in properties) {
+      if (properties.group instanceof Array) {
+        for (var i = 0; i < properties.group.length; i++) {
+          search.push(properties.group[i] + " " + properties.member_name);
+        }
+      } else {
+        search.push(properties.group + " " + properties.member_name);
       }
-    } else {
-      search.push(properties.group + " " + properties.member_name);
+    }
+
+    if ("alt_groups_roman" in properties && properties.alt_groups_roman) {
+      var alt_groups = properties.alt_groups_roman;
+      if (!(alt_groups instanceof Array)) {
+        alt_groups = [alt_groups];
+      }
+
+      for (var i = 0; i < alt_groups.length; i++) {
+        if (alt_groups[i]) {
+          search.push(alt_groups[i] + " " + properties.member_name);
+        }
+      }
     }
   }
 
-  if ("group_kr" in properties && "member_name_kr" in properties) {
-    search.push(properties.group_kr + " " + properties.member_name_kr);
+  if ("member_name_kr" in properties) {
+    if ("group_kr" in properties) {
+      search.push(properties.group_kr + " " + properties.member_name_kr);
+    }
+
+    if ("alt_groups" in properties && properties.alt_groups) {
+      var alt_groups = properties.alt_groups;
+      if (!(alt_groups instanceof Array)) {
+        alt_groups = [alt_groups];
+      }
+
+      for (var i = 0; i < alt_groups.length; i++) {
+        if (alt_groups[i]) {
+          search.push(alt_groups[i] + " " + properties.member_name_kr);
+        }
+      }
+    }
   }
 
   var newsearch = [];
@@ -404,6 +448,8 @@ function update_star(star, properties) {
     "name_kr",
     "member_name",
     "member_name_kr",
+    "alt_groups",
+    "alt_groups_roman",
     "noupload",
     "group_noupload"
   ];
@@ -705,6 +751,8 @@ client.on('ready', () => {
   console.log("Discord ready");
 });
 
+client.on('error', console.error);
+
 async function check_accepted_guild(guild) {
   if (guild.id === config.parsed.DISCORD_GUILD_ID)
     return true;
@@ -783,7 +831,7 @@ client.on('message', async message => {
   }
 
   console.log(args);
-  var command = args[0];
+  var command = args[0].toLowerCase();
 
   var youre = is_user ? "you are" : "your guild is";
   var commands = {
