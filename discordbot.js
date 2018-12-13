@@ -584,8 +584,9 @@ async function create_rule(options) {
   return rule;
 }
 
-function remove_rule(rule_id) {
-  return db_rules.remove({rule_id: sanitize_id(rule_id)});
+function remove_rule(rule_id, source) {
+  console.log("Removing rule: " + rule_id + " (because of " + source + ")");
+  return db_rules.remove({rule_id: sanitize_id(rule_id)}, {multi: false});
 }
 
 async function get_rules_for_account(account, replay) {
@@ -632,7 +633,8 @@ async function get_rules_for_user_account(userid, account) {
     return [];
 
   return await db_rules.find({
-    "$or": orquery
+    "$or": orquery,
+    user: sanitize_id(userid)
   });
 }
 
@@ -734,10 +736,20 @@ function discord_invite_msg(userid) {
 }
 
 async function unsubscribe(message, ruleid) {
-  remove_rule(ruleid);
-
-  if (message) {
-    message.reply("Removed rule **" + ruleid + "**");
+  try {
+    var removed = await remove_rule(ruleid, "unsubscribe_func");
+    if (message) {
+      if (removed && removed.result.n > 0) {
+        message.reply("Removed rule **" + ruleid + "**");
+      } else {
+        message.reply("Rule **" + ruleid + "** not found");
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    if (message) {
+      message.reply("Unknown error removing rule **" + ruleid + "**");
+    }
   }
 }
 
@@ -751,7 +763,9 @@ client.on('ready', () => {
   console.log("Discord ready");
 });
 
-client.on('error', console.error);
+client.on('error', (err) => {
+  console.error(err);
+});
 
 async function check_accepted_guild(guild) {
   if (guild.id === config.parsed.DISCORD_GUILD_ID)
@@ -1062,7 +1076,6 @@ client.on('message', async message => {
     unsubscribe(message, rule_id);
     break;
   case "list":
-    console.log("OK");
     var rules = [];
 
     if (is_user) {
@@ -1159,7 +1172,9 @@ client.on('raw', async function(event) {
       return;
     }
 
-    var user = client.users.get(event.d.user_id);
+    var event_user_id = sanitize_id(event.d.user_id);
+
+    var user = client.users.get(event_user_id);
     var channel = client.channels.get(event.d.channel_id) || await user.createDM();
     /*if (event.d.channel_id !== lives_channel_id) {
       return;
@@ -1195,24 +1210,26 @@ client.on('raw', async function(event) {
           //console.log(account);
           if (event.d.emoji.name === subscribe_emoji) {
             if (sent_message.type === "live")
-              subscribe_user(event.d.user_id, star, false);
+              subscribe_user(event_user_id, star, false);
             else if (sent_message.type === "replay")
-              subscribe_user(event.d.user_id, star, "only");
+              subscribe_user(event_user_id, star, "only");
             //console.log("sub");
           } else if (event.d.emoji.name === unsubscribe_emoji) {
-            //unsubscribe(event.d.user_id, parsed);
-            var rules = await get_rules_for_user_account(event.d.user_id, account);
+            //unsubscribe(event_user_id, parsed);
+            var rules = await get_rules_for_user_account(event_user_id, account);
             if (rules && rules.length > 0) {
               rules.forEach(rule => {
                 if (sent_message.type === "live") {
                   if (rule.replays === true || rule.replays === false)
-                    remove_rule(rule.rule_id);
+                    remove_rule(rule.rule_id, "emoji");
                 } else if (sent_message.type === "replay") {
                   if (rule.replays === true || rule.replays === "only")
-                    remove_rule(rule.rule_id);
+                    remove_rule(rule.rule_id, "emoji");
                 }
               });
-              senddm(event.d.user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
+              senddm(event_user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
+            } else {
+              senddm(event_user_id, "Nothing to unsubscribe to");
             }
             //console.log("unsub");
           }
@@ -1299,6 +1316,8 @@ async function send_message(body) {
           return;
         }
 
+        console.log("Notifying " + rule.user + " of " + body.type + ": " + body.name);
+
         var message = await senddm(rule.user, this_text + unsubscribe_msg, properties);
         message.react(unsubscribe_emoji);
       } else if (rule.guild && rule.channel) {
@@ -1308,6 +1327,8 @@ async function send_message(body) {
         if (already_messaged && already_messaged.length > 0) {
           return;
         }
+
+        console.log("Notifying " + rule.channel + " of " + body.type + ": " + body.name);
 
         var message = await send_channel(rule.guild, rule.channel, this_text + subscribe_msg, properties);
         await message.react(subscribe_emoji);

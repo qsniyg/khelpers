@@ -95,7 +95,7 @@ function can_share(member, account) {
           return false;
       }
 
-      if (followers > 1000*1000)
+      if (followers > 200*1000 && member.member_name && !member.member_name.startsWith("@"))
         return true;
     }
   }
@@ -277,7 +277,8 @@ function process_add_account() {
       if (!member)
         continue;
 
-      if (member.group !== accountname)
+      if (member.group !== accountname &&
+          member.member_name_kr !== accountname)
         continue;
 
       for (var j = 0; j < member.accounts.length; j++) {
