@@ -320,7 +320,8 @@ function parse_name(text, obj) {
 
   var lastfirst = get_last_firstname(text);
   lastname = parse_hangul(lastfirst[0], false, obj);
-  var lastname_force = parse_hangul(lastfirst[0], true, obj);
+  //var lastname_force = parse_hangul(lastfirst[0], true, obj);
+  var user_lastname = get_user_roman(lastfirst[0], obj);
   rest = lastfirst[1];
   /*if (text.indexOf(" ") < 0) {
     lastname = parse_hangul(text[0], false, obj);
@@ -330,7 +331,9 @@ function parse_name(text, obj) {
     rest = text.replace(/^[^ ]* +/, "");
   }*/
 
-  if (lastname === lastname_force) {
+  if (user_lastname) {
+    lastname = user_lastname;
+  } else {
     if (text[0] === "김") {
       lastname = "Kim";
     } else if (text[0] === "이") {
@@ -498,6 +501,10 @@ function get_name(text, member) {
 
   if ("hide_group" in alt) {
     ret.hide_group = alt.hide_group;
+  }
+
+  if ("bot_whitelist" in alt) {
+    ret.bot_whitelist = alt.bot_whitelist;
   }
 
   if (text[0] === "@") {
@@ -679,6 +686,7 @@ function parse_member(obj, options) {
     member.upload_privacy = name.upload_privacy;
     member.use_fullname = name.use_fullname;
     member.hide_group = name.hide_group;
+    member.bot_whitelist = name.bot_whitelist;
   }
 
 

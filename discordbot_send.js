@@ -75,6 +75,10 @@ function can_share(member, account) {
   if (!member || member.family)
     return false;
 
+  if (member.bot_whitelist === true) {
+    return true;
+  }
+
 
   var properties = get_properties(account);
   if (properties) {
@@ -141,6 +145,8 @@ function main(members, options) {
       watch_link: account.link,
       name: member.title,
       name_kr: member.title_kr,
+      names: member.names,
+      nicks: member.nicks,
       member_name: member.member_name,
       member_name_kr: member.member_name_kr,
       noupload: member.noupload,

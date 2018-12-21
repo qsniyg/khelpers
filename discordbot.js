@@ -296,8 +296,18 @@ function get_star_accounts(starid) {
 
 function strip_search(search) {
   return search.toLowerCase()
-    .replace(/[-_'".,!\s]/g, "")
+    .replace(/[-_'".,!/\s]/g, "")
     .replace(/^\$+/, "");
+}
+
+function extend_with_possible_array(original, el) {
+  if (!(el instanceof Array)) {
+    el = [el];
+  }
+
+  for (var i = 0; i < el.length; i++) {
+    original.push(el);
+  }
 }
 
 function create_search(properties) {
@@ -311,7 +321,62 @@ function create_search(properties) {
     search.push(properties.name_kr);
   }
 
+  var roman_groups = [];
+  var korean_groups = [];
+  var roman_member_names = [];
+  var korean_member_names = [];
+
+  if ("group" in properties) {
+    extend_with_possible_array(roman_groups, properties.group);
+  }
+
+  if ("alt_groups_roman" in properties && properties.alt_groups_roman) {
+    extend_with_possible_array(roman_groups, properties.alt_groups_roman);
+  }
+
+  if ("group_kr" in properties) {
+    extend_with_possible_array(korean_groups, properties.group_kr);
+  }
+
+  if ("alt_groups" in properties && properties.alt_groups) {
+    extend_with_possible_array(korean_groups, properties.alt_groups);
+  }
+
   if ("member_name" in properties) {
+    extend_with_possible_array(roman_member_names, properties.member_name);
+  }
+
+  if ("member_name_kr" in properties) {
+    extend_with_possible_array(korean_member_names, properties.member_name_kr);
+  }
+
+  if ("nicks" in properties && properties.nicks && properties.nicks instanceof Array) {
+    for (var i = 0; i < properties.nicks.length; i++) {
+      var nick = properties.nicks[i];
+
+      if (nick.hangul) {
+        korean_member_names.push(nick.hangul);
+      }
+
+      if (nick.roman) {
+        extend_with_possible_array(roman_member_names, nick.roman);
+      }
+    }
+  }
+
+  roman_groups.forEach(group => {
+    roman_member_names.forEach(name => {
+      search.push(group + " " + name);
+    });
+  });
+
+  korean_groups.forEach(group => {
+    korean_member_names.forEach(name => {
+      search.push(group + " " + name);
+    });
+  });
+
+  /*if ("member_name" in properties) {
     if ("group" in properties) {
       if (properties.group instanceof Array) {
         for (var i = 0; i < properties.group.length; i++) {
@@ -353,7 +418,7 @@ function create_search(properties) {
         }
       }
     }
-  }
+  }*/
 
   var newsearch = [];
   search.forEach(item => {
@@ -753,7 +818,19 @@ async function unsubscribe(message, ruleid) {
   }
 }
 
-client.on('ready', () => {
+async function reset_activity() {
+  //await client.user.setPresence({game: null});
+  client.user.setActivity(null);
+  //client.user.setPresence({game: {name: " ", type: 0}});
+}
+
+client.on('ready', async () => {
+  try {
+    await reset_activity();
+  } catch (e) {
+    console.error("Unable to reset client activity", e);
+  }
+
   self_userid = client.user.id;
   bot_guild = client.guilds.get(config.parsed.DISCORD_GUILD_ID);
   if (!bot_guild) {
@@ -814,7 +891,7 @@ client.on('message', async message => {
 
   console.log(msg);
 
-  var newmsg = msg;
+  var newmsg = msg.replace(/[“”]/g, '"');
   var args = [];
   var quote = null;
   for (var i = 0; i < 1000; i++) {
@@ -1229,7 +1306,7 @@ client.on('raw', async function(event) {
               });
               senddm(event_user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
             } else {
-              senddm(event_user_id, "Nothing to unsubscribe to");
+              senddm(event_user_id, "Nothing to unsubscribe from");
             }
             //console.log("unsub");
           }
@@ -1242,6 +1319,49 @@ client.on('raw', async function(event) {
     );
   }
 });
+
+var clear_activity_timeout = null;
+var clear_activity_time = 30*1000;
+var current_watching = null;
+async function clear_status() {
+  try {
+    //await client.user.setActivity(null);
+    await reset_activity();
+
+    if (clear_activity_timeout) {
+      clearTimeout(clear_activity_timeout);
+      clear_activity_timeout = null;
+    }
+
+    if (current_watching) {
+      current_watching = null;
+    }
+  } catch (e) {
+    console.error("Error clearing activity: ", e);
+  }
+}
+
+async function set_status(body) {
+  if (!body || body.type !== "live")
+    return;
+
+  if (current_watching && current_watching.date && body.date && body.date < current_watching.date)
+    return;
+
+  if (clear_activity_timeout) {
+    clearTimeout(clear_activity_timeout);
+    clear_activity_timeout = null;
+  }
+
+  try {
+    await client.user.setActivity(body.name, { type: 'WATCHING' });
+
+    current_watching = body;
+    clear_activity_timeout = setTimeout(clear_status, clear_activity_time);
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 async function send_message(body) {
   var sitename = "";
@@ -1263,7 +1383,7 @@ async function send_message(body) {
       }
     }
 
-    var message_text, subscribe_msb, unsubscribe_msg;
+    var message_text, subscribe_msg, unsubscribe_msg;
 
     if (body.type === "live") {
       message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
@@ -1277,6 +1397,12 @@ async function send_message(body) {
 
     var account = await find_account(body);
     var rules = await get_rules_for_account(account, body.type === "replay");
+
+    try {
+      set_status(body);
+    } catch (e) {
+      console.error(e);
+    }
 
     rules.forEach(async rule => {
       if (rule.created_at > body.date) {
@@ -1316,7 +1442,7 @@ async function send_message(body) {
           return;
         }
 
-        console.log("Notifying " + rule.user + " of " + body.type + ": " + body.name);
+        console.log("Notifying user " + rule.user + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
         var message = await senddm(rule.user, this_text + unsubscribe_msg, properties);
         message.react(unsubscribe_emoji);
@@ -1328,7 +1454,7 @@ async function send_message(body) {
           return;
         }
 
-        console.log("Notifying " + rule.channel + " of " + body.type + ": " + body.name);
+        console.log("Notifying channel " + rule.channel + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
         var message = await send_channel(rule.guild, rule.channel, this_text + subscribe_msg, properties);
         await message.react(subscribe_emoji);
