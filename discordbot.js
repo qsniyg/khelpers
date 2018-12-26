@@ -306,7 +306,7 @@ function extend_with_possible_array(original, el) {
   }
 
   for (var i = 0; i < el.length; i++) {
-    original.push(el);
+    original.push(el[i]);
   }
 }
 
@@ -325,6 +325,7 @@ function create_search(properties) {
   var korean_groups = [];
   var roman_member_names = [];
   var korean_member_names = [];
+
 
   if ("group" in properties) {
     extend_with_possible_array(roman_groups, properties.group);

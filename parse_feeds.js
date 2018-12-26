@@ -495,6 +495,10 @@ function get_name(text, member) {
     ret.upload_privacy = alt.upload_privacy;
   }
 
+  if ("playlist" in alt) {
+    ret.playlist = alt.playlist;
+  }
+
   if ("use_fullname" in alt) {
     ret.use_fullname = alt.use_fullname;
   }
@@ -684,6 +688,7 @@ function parse_member(obj, options) {
     member.description_template = name.description_template;
     member.old_usernames = name.old_usernames;
     member.upload_privacy = name.upload_privacy;
+    member.playlist = name.playlist;
     member.use_fullname = name.use_fullname;
     member.hide_group = name.hide_group;
     member.bot_whitelist = name.bot_whitelist;

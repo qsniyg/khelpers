@@ -98,7 +98,8 @@ function create_video(infile, orients) {
     '-safe', '0',
     '-i', '/tmp/rotated_concat.txt',
     '-c', 'copy',
-    outfile
+    outfile,
+    '-y'
   ])) {
     console.log("Error running final ffmpeg");
     //cleanup(files);

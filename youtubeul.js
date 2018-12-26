@@ -125,6 +125,21 @@ function upload_video_dm(options) {
   });
 }
 
+function add_to_playlist(youtube, playlist, video, cb) {
+  youtube.playlistItems.insert({
+    part: "snippet",
+    resource: {
+      snippet: {
+        playlistId: playlist,
+        resourceId: {
+          kind: "youtube#video",
+          videoId: video,
+        }
+      }
+    }
+  }, cb);
+}
+
 function upload_video_yt(options) {
   console.dir(options);
 
@@ -265,10 +280,18 @@ function upload_video_yt(options) {
           });
         }
 
-        //process.exit();
-        if (ytupload)
-          process.exit();
-        upload_video_dm(options);
+
+        var endcb = function() {
+          //process.exit();
+          if (ytupload)
+            process.exit();
+          upload_video_dm(options);
+        };
+
+        if (options.yt_playlist)
+          add_to_playlist(youtube, options.yt_playlist, data.id, endcb);
+        else
+          endcb();
       });
 
       var fileSize = fs.statSync(options.file).size;
@@ -340,6 +363,7 @@ function main() {
   var filename = process.argv[2];
   //console.log(filename);
   var real_filename = filename;
+  var yt_playlist = null;
 
   //var dmupload = false;
   if (argv.length >= 4) {
@@ -358,6 +382,8 @@ function main() {
         desc_prepend_kr = argv[i].replace(/^[^=]*=/, "") + "\n\n";
       } else if (argv[i].indexOf("real=") === 0) {
         real_filename = argv[i].replace(/^[^=]*=/, "");
+      } else if (argv[i].indexOf("playlist=") === 0) {
+        yt_playlist = argv[i].replace(/^[^=]*=/, "");
       } else if (argv[i] === "reup") {
         reupload = true;
       }
@@ -563,6 +589,10 @@ function main() {
           privacy = member.upload_privacy;
         }
 
+        if (!yt_playlist && member.playlist && member.playlist.length >= 10) {
+          yt_playlist = member.playlist;
+        }
+
         do_upload({
           firsttitle: firsttitle,
           firsttitle_korean: firsttitle_korean,
@@ -573,7 +603,8 @@ function main() {
           tags: member.tags,
           file: real_filename,
           privacy: privacy,
-          youtube_id: youtubeid
+          youtube_id: youtubeid,
+          yt_playlist: yt_playlist
         });
         return;
       }
@@ -588,7 +619,8 @@ function main() {
       description_kr: description,
       file: real_filename,
       tags: [username_str],
-      youtube_id: youtubeid
+      youtube_id: youtubeid,
+      yt_playlist: yt_playlist
     });
   }).catch((e) => {
     console.error(e);
@@ -627,7 +659,8 @@ function do_upload(options) {
         description_kr: options.description_kr,
         tags: options.tags,
         file: options.file,
-        privacy: options.privacy
+        privacy: options.privacy,
+        yt_playlist: options.yt_playlist
       });
       return;
     }
@@ -639,7 +672,8 @@ function do_upload(options) {
       tags: options.tags,
       file: options.file,
       privacy: options.privacy,
-      youtube_id: options.youtube_id
+      youtube_id: options.youtube_id,
+      yt_playlist: options.yt_playlist
     });
   }, () => {
     upload_video({
@@ -650,7 +684,8 @@ function do_upload(options) {
       tags: options.tags,
       file: options.file,
       privacy: options.privacy,
-      youtube_id: options.youtube_id
+      youtube_id: options.youtube_id,
+      yt_playlist: options.yt_playlist
     });
   });
 }
