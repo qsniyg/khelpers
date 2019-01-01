@@ -95,6 +95,7 @@ function can_share(member, account) {
       //console.log(added_at);
       if (added_at) {
         var diff = Date.now() - added_at;
+        //console.log(diff, delay);
         if (diff <= time_low || diff < delay)
           return false;
       }

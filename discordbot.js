@@ -1033,12 +1033,18 @@ client.on('message', async message => {
       return message.reply("Needs at least " + arglength + " arguments (use the `help` command for more information)");
     }
 
+    var star_search = is_user ? args[1] : args[2];
     var replays = is_user ? args[2] : args[3];
 
     if (replays !== "true" &&
         replays !== "false" &&
         replays !== "only") {
-      return message.reply("The `replays` argument needs to be one of `true`, `false`, or `only`");
+      var memberhelp = "";
+      if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
+        memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
+      }
+
+      return message.reply("The `replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
     }
 
     if (replays === "true")
@@ -1057,7 +1063,7 @@ client.on('message', async message => {
       }
 
       if (!ok) {
-        return message.reply("Invalid `channel_id`");
+        return message.reply("Invalid `channel_id` (make sure you copied the ID, not the name of the channel)");
       }
 
       if (!message.guild) {
@@ -1095,8 +1101,6 @@ client.on('message', async message => {
         pings.push(ping);
       }
     }
-
-    var star_search = is_user ? args[1] : args[2];
 
     var star;
     if (star_search === "*") {
@@ -1236,6 +1240,9 @@ client.on('message', async message => {
     }
 
     message.reply(message_text);
+    break;
+  default:
+    message.reply("Unknown command (use the `help` command for more information)");
     break;
   }
 });

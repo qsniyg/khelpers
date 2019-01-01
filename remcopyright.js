@@ -65,7 +65,8 @@ function parse_copyright_table(tr, id) {
       alltext.indexOf("동영상 콘텐츠") >= 0) {
     cuttype = "av";
   } else if (alltext.indexOf("음원") >= 0 ||
-             alltext.indexOf("음악 작품") >= 0) {
+             alltext.indexOf("음악 작품") >= 0 ||
+             alltext.indexOf("오디오 콘텐츠") >= 0) {
     cuttype = "a";
   } else {
     console.log("Unknown cut type: " + parse_feeds.strip(alltext));

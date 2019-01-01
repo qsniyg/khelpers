@@ -292,6 +292,10 @@ function has_hangul(text, k_counted) {
 }
 module.exports.has_hangul = has_hangul;
 
+function is_roman(text) {
+  return text.match(/^[a-zA-Z0-9 ]+$/);
+}
+
 function is_mixed(text) {
   return (
     !!text.match(/[0-9]/) ||
@@ -803,9 +807,18 @@ function parse_member(obj, options) {
     });
 
     for (var i = 0; i < member.names.length; i++) {
-      if (member.names[i].roman_first && member.names[i].roman_first.match(/[a-zA-Z]/)) {
-        member.names_roman_first = member.names[i].roman_first;
+      if (is_roman(member.names[i].hangul)) {
+        member.names_roman_first = member.names[i].hangul;
         break;
+      }
+    }
+
+    if (!member.names_roman_first) {
+      for (var i = 0; i < member.names.length; i++) {
+        if (member.names[i].roman_first && member.names[i].roman_first.match(/[a-zA-Z0-9]/)) {
+          member.names_roman_first = member.names[i].roman_first;
+          break;
+        }
       }
     }
 
@@ -824,9 +837,18 @@ function parse_member(obj, options) {
     });
 
     for (var i = 0; i < member.nicks.length; i++) {
-      if (member.nicks[i].roman_first && member.nicks[i].roman_first.match(/[a-zA-Z]/)) {
-        member.nicks_roman_first = member.nicks[i].roman_first;
+      if (is_roman(member.nicks[i].hangul)) {
+        member.nicks_roman_first = member.nicks[i].hangul;
         break;
+      }
+    }
+
+    if (!member.nicks_roman_first) {
+      for (var i = 0; i < member.nicks.length; i++) {
+        if (member.nicks[i].roman_first && member.nicks[i].roman_first.match(/[a-zA-Z0-9]/)) {
+          member.nicks_roman_first = member.nicks[i].roman_first;
+          break;
+        }
       }
     }
 

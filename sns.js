@@ -2893,6 +2893,7 @@ function main() {
         var lastspace = true;
         var inword = false;
         var hanword = false;
+        var hanword_start = null;
         var hashword = false;
         var words = 0;
         var hanwords = 0;
@@ -2900,6 +2901,7 @@ function main() {
         var chars = 0;
         var hanchars = 0;
         var hashchars = 0;
+        var unique_hanwords = {};
 
         for (var i = 0; i < newcontent.length; i++) {
           var cereal = cheerio.load(newcontent[i].content);
@@ -2909,9 +2911,16 @@ function main() {
               if (inword) {
                 inword = false;
 
-                if (hanword)
+                if (hanword) {
                   hanwords++;
+                  if (hanword_start !== null) {
+                    var w_length = j - hanword_start;
+                    var the_hanword = text.substr(j, w_length);
+                    unique_hanwords[the_hanword] = true;
+                  }
+                }
                 hanword = false;
+                hanword_start = null;
 
                 if (hashword)
                   hashwords++;
@@ -2938,6 +2947,8 @@ function main() {
             if (parse_feeds.is_hangul(text.charCodeAt(j))) {
               hanchars++;
               hanword = true;
+              if (hanword_start === null)
+                hanword_start = j;
             }
 
             if (hashword) {
@@ -2958,7 +2969,7 @@ function main() {
           }
         }
 
-        console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ", hashtags: " + hashwords + "/" + hashchars + ")");
+        console.log(words + "/" + chars + " words/characters (korean: " + hanwords + "/" + hanchars + ", hashtags: " + hashwords + "/" + hashchars + ", unique: ~" + Object.keys(unique_hanwords).length + ")");
         if (!readlineSync.keyInYNStrict("Do you wish to continue?")) {
           return;
         }
