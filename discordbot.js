@@ -883,7 +883,8 @@ client.on('message', async message => {
       .replace(/\s*$/, "");
 
   if (message.channel.type !== "dm" &&
-      !msg.startsWith("<@" + self_userid + ">"))
+      !msg.startsWith("<@" + self_userid + ">") &&
+      !msg.startsWith("<@!" + self_userid + ">"))
     return;
 
   if (message.channel.type !== "dm" &&
@@ -894,7 +895,7 @@ client.on('message', async message => {
 
   var is_user = message.channel.type === "dm";
 
-  msg = msg.replace(/^<@[0-9]+>\s*/, "");
+  msg = msg.replace(/^<@[^>]*[0-9]+>\s*/, "");
 
   console.log(msg);
 

@@ -46,6 +46,9 @@ function interpolate(value_low, value_high, input_low, input_high, input) {
 
 function get_properties(account) {
   var desc = account.obj.description;
+  if (!desc)
+    return null;
+
   var desc_info = desc.replace(/^[\s\S]*\n---\n/, "");
   if (desc_info != desc) {
     var desc_properties = {};
