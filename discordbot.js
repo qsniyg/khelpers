@@ -635,7 +635,7 @@ async function create_rule(options) {
 
   var rule = await db_rules.find(options);
   if (rule && rule.length > 0)
-    return rule[0];
+    return [rule[0], false];
 
   if (!options.rule_id) {
     options.rule_id = await create_rule_id();
@@ -647,7 +647,7 @@ async function create_rule(options) {
 
   console.log(options);
   var rule = await db_rules.insert(options);
-  return rule;
+  return [rule, true];
 }
 
 function remove_rule(rule_id, source) {
@@ -775,9 +775,12 @@ async function subscribe_user(userid, account, replays) {
   var options = base_rule(account, replays);
   options.user = userid;
 
-  await create_rule(options);
+  var output = await create_rule(options);
 
-  senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+  if (output[1])
+    senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+  else
+    senddm(userid, "Already subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
 }
 
 async function subscribe_channel(message, guild, channel_id, account, replays, pings) {
@@ -786,10 +789,13 @@ async function subscribe_channel(message, guild, channel_id, account, replays, p
   options.channel = channel_id;
   options.ping_roles = pings;
 
-  await create_rule(options);
+  var output = await create_rule(options);
 
   if (message) {
-    message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
+    if (output[1])
+      message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
+    else
+      message.reply("Already subscribed to **" + get_subscribe_name(account) + "**");
   }
 }
 
@@ -1125,8 +1131,8 @@ client.on('message', async message => {
     }
     break;
   case "unsubscribe":
-    if (args.length !== 2) {
-      return message.reply ("Needs `rule_id` (use the `help` command for more information)");
+    if (args.length < 2) {
+      return message.reply ("Needs `rule_id` (use the `list` command to find rules you are subscribed to)");
     }
 
     var rule_id = args[1];
@@ -1139,7 +1145,7 @@ client.on('message', async message => {
     }
 
     if (!ok) {
-      return message.reply("Invalid `rule_id`");
+      return message.reply("Invalid `rule_id` (this should be a number, you can find subscribed rules using the `list` command)");
     }
 
     var query = {rule: rule_id};
