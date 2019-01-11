@@ -346,6 +346,45 @@ function process_accept_guild() {
   }
 }
 
+function process_delete() {
+  if (!process.argv[3] || !process.argv[4])
+    return;
+
+  var action = null;
+
+  if (process.argv[3] === "replay") {
+    if (!process.argv[4].match(/^https?:\/\/youtu/))
+      return;
+
+    action = {
+      type: "message",
+      broadcast_guid: process.argv[4],
+      message_type: process.argv[3]
+    };
+  }
+
+  if (action) {
+    request = require('request');
+    request.post({
+      uri: 'http://localhost:8456/delete',
+      method: 'POST',
+      json: action
+    }, function() {
+      var readlineSync = require('readline-sync');
+      if (!readlineSync.keyInYNStrict("Really delete?")) {
+        return;
+      }
+
+      action.confirm = true;
+      request.post({
+        uri: 'http://localhost:8456/delete',
+        method: 'POST',
+        json: action
+      });
+    });
+  }
+}
+
 function start() {
   if (process.argv.length > 2) {
     if (process.argv[2] === "account") {
@@ -354,6 +393,8 @@ function start() {
     } else if (process.argv[2] === "guild") {
       process_accept_guild();
       return;
+    } else if (process.argv[2] === "delete") {
+      return process_delete();
     }
   }
 

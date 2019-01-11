@@ -179,10 +179,10 @@ function find_account(properties) {
         site: properties.site
       };
 
-      if ("username" in properties) {
-        query.username = properties.username;
-      } else if ("uid" in properties) {
+      if ("uid" in properties) {
         query.uid = properties.uid;
+      } else if ("username" in properties) {
+        query.username = properties.username;
       } else {
         return resolve(null);
       }
@@ -1568,6 +1568,60 @@ async function do_guild_white_blacklist(body) {
 fastify.post('/guild', (request, reply) => {
   try {
     do_guild_white_blacklist(request.body);
+    reply.send({status: "ok"});
+  } catch (err) {
+    console.error(err);
+    reply.send({status: "not_ok"});
+  }
+});
+
+async function do_delete(body) {
+  if (!body || !body.type)
+    return;
+
+  if (body.type !== "message" || !body.message_type)
+    return;
+
+  if (!body.broadcast_guid)
+    return;
+
+  var messages = await db_messages.find({
+    type: body.message_type,
+    broadcast_guid: body.broadcast_guid
+  });
+
+  if (!body.confirm) {
+    console.log(messages);
+  } else {
+    for (var i = 0; i < messages.length; i++) {
+      var message = messages[i];
+
+      try {
+        var dmessage = null;
+
+        if (message.guild) {
+          var guild = client.guilds.get(message.guild);
+          var channel = guild.channels.get(message.channel);
+          dmessage = await channel.fetchMessage(message.messageid);
+        } else if (message.user) {
+          var user = await client.fetchUser(message.user);
+          var channel = await user.createDM();
+          dmessage = await channel.fetchMessage(message.messageid);
+        }
+
+        await dmessage.delete();
+        console.log("Deleted " + message.messageid);
+      } catch (err) {
+        console.error(err);
+        console.log("Failed to delete message:", message);
+      }
+    }
+  }
+}
+
+fastify.post('/delete', (request, reply) => {
+  try {
+    do_delete(request.body);
     reply.send({status: "ok"});
   } catch (err) {
     console.error(err);
