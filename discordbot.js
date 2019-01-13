@@ -905,7 +905,7 @@ client.on('message', async message => {
   var is_user = message.channel.type === "dm";
 
   var newmsg = msg.replace(/^(?:<@[^>]*[0-9]+>|!LiveBot)\s+/i, "");
-  if (newmsg === msg) {
+  if (newmsg === msg && false) {
     console.log("Error processing message: " + msg);
     return;
   }
