@@ -884,22 +884,38 @@ client.on('message', async message => {
 
   if (message.channel.type !== "dm" &&
       !msg.startsWith("<@" + self_userid + ">") &&
-      !msg.startsWith("<@!" + self_userid + ">"))
+      !msg.startsWith("<@!" + self_userid + ">") &&
+      !msg.toLowerCase().startsWith("!livebot"))
     return;
 
   if (message.channel.type !== "dm" &&
       !message.member.roles.find("name", "LiveBotAdmin")) {
-    message.reply("You need the `LiveBotAdmin` role to modify the bot's settings for the guild");
-    return;
+    if (!message.guild) {
+      console.log("Not in a guild " + message.author.id + " '" + message.content + "' " + message.channel.type);
+      message.reply("Not in a guild? You shouldn't see this");
+      return;
+    }
+
+    if (message.author.id !== message.guild.ownerID) {
+      message.reply("You need the `LiveBotAdmin` role to modify the bot's settings for the guild");
+      return;
+    }
   }
 
   var is_user = message.channel.type === "dm";
 
-  msg = msg.replace(/^<@[^>]*[0-9]+>\s*/, "");
+  var newmsg = msg.replace(/^(?:<@[^>]*[0-9]+>|!LiveBot)\s+/i, "");
+  if (newmsg === msg) {
+    console.log("Error processing message: " + msg);
+    return;
+  }
+  msg = newmsg;
 
   console.log(msg);
 
-  var newmsg = msg.replace(/[“”]/g, '"');
+  var newmsg = msg
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'");
   var args = [];
   var quote = null;
   for (var i = 0; i < 1000; i++) {
@@ -1046,7 +1062,7 @@ client.on('message', async message => {
     if (replays !== "true" &&
         replays !== "false" &&
         replays !== "only") {
-      var memberhelp = "";
+      var memberhelp = " (use the `help` command for more information)";
       if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
         memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
       }
@@ -1115,13 +1131,16 @@ client.on('message', async message => {
     } else {
       star = await find_star({search: star_search});
       if (!star) {
-        var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
+        star = await find_star({username: star_search, site: "instagram"});
+        if (!star) {
+          var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
 
-        var invite_msg = discord_invite_msg(message.author.id);
-        if (invite_msg)
-          text += "\n\n" + invite_msg;
+          var invite_msg = discord_invite_msg(message.author.id);
+          if (invite_msg)
+            text += "\n\n" + invite_msg;
 
-        return message.reply(text);
+          return message.reply(text);
+        }
       }
     }
 
