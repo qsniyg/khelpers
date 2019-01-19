@@ -443,6 +443,7 @@ function main() {
 
     var parse_youtubeurl = function(i) {
       var youtubeurl = youtubeurls[i];
+      console.log("Parsing youtube URL: " + youtubeurl);
 
       request({
         method: "GET",
@@ -459,6 +460,7 @@ function main() {
         }
       }, (error, response, body) => {
         if (error) {
+          console.error("Error fetching youtube URL:");
           console.error(error);
           return;
         }

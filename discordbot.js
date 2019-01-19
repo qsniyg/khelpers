@@ -949,6 +949,14 @@ client.on('message', async message => {
   var command = args[0].toLowerCase();
 
   var youre = is_user ? "you are" : "your guild is";
+  var replays_help = [
+    "The `with_replays` argument determines whether or not replays are included. Possible values:",
+    "",
+    "    * `true`  - Subscribes to both livestreams and replays",
+    "    * `false` - Only subscribes to livestreams",
+    "    * `only`  - Only subscribes to replays"
+  ].join("\n");
+
   var commands = {
     "help": {
       emoji: "❓",
@@ -964,12 +972,12 @@ client.on('message', async message => {
     },
     "subscribe": {
       emoji: subscribe_emoji,
-      sample_args: "group_and_member_name replays",
+      sample_args: "group_and_member_name with_replays",
       shorthelp: "Subscribes yourself to a person's lives",
       longhelp: [
         "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
         "",
-        "If `replays` is `true`, it will also post when a replay is uploaded on Youtube. Setting `replays` to `only` will only post replays.",
+        replays_help,
         "",
         "Examples:",
         "",
@@ -994,14 +1002,14 @@ client.on('message', async message => {
   };
 
   if (!is_user) {
-    commands.subscribe.sample_args = "channel_id group_and_member_name replays [ping_role_id]";
+    commands.subscribe.sample_args = "channel_id group_and_member_name with_replays [ping_role_id]";
     commands.subscribe.shorthelp = "Subscribes a channel to a person's lives";
     commands.subscribe.longhelp = [
       "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'",
       "",
       "The `group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
       "",
-      "If `replays` is true, it will also post when a replay is uploaded on Youtube. Setting `replays` to `only` will only post replays.",
+      replays_help,
       "",
       "`ping_role_id` is optional, but if specified, the specified role will be pinged.",
       "    To find the role ID, make sure the rule can be pinged, and write `\\@rolename`. After sending, if the message is `<@&12345>`, the role ID is `12345`.",
@@ -1067,7 +1075,7 @@ client.on('message', async message => {
         memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
       }
 
-      return message.reply("The `replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
+      return message.reply("The `with_replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
     }
 
     if (replays === "true")
@@ -1266,6 +1274,32 @@ client.on('message', async message => {
     }
 
     message.reply(message_text);
+    break;
+  case "role":
+    if (is_user || !message.guild) {
+      message.reply("Not in guild");
+      break;
+    }
+
+    if (args.length < 2) {
+      message.reply("Need role name");
+      break;
+    }
+
+    var reply_text = "";
+    message.guild.roles.forEach((role) => {
+      if (role.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, "") ===
+          args[1].toLowerCase().replace(/[^a-zA-Z0-9]/g, "")) {
+        reply_text += role.name + " " + role.id;
+      }
+    });
+
+    if (!reply_text) {
+      message.reply("No role found");
+      break;
+    }
+
+    message.reply(reply_text);
     break;
   default:
     message.reply("Unknown command (use the `help` command for more information)");
