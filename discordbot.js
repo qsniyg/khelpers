@@ -31,29 +31,6 @@ var subscribe_emoji = '✉';
 var unsubscribe_emoji = '❌';
 var dm_helptext = "\n\n*Type `help` for a list of commands*";
 
-function parse_msg(text) {
-  if (!text.match(/^\*\*.*?\*\* is live on .*\nhttps?:\/\//))
-    return null;
-
-  var name = text.replace(/^\*\*(.*?)\*\*[\s\S]*$/, "$1");
-  if (name === text)
-    return null;
-
-  var site = text.replace(/^.*\nhttps?:\/\/(?:[^/]*\.)?([^/.]*)\.[a-z]+\/[\s\S]*$/, "$1");
-  if (site === text)
-    return null;
-
-  var username = text.replace(/^.*\nhttps?:\/\/[^/]*\/([^/]*)[\s\S]*$/, "$1");
-  if (username === text)
-    return null;
-
-  return {
-    name,
-    site,
-    username
-  };
-}
-
 async function get_sent_message(messageid) {
   var message = await db_messages.find({messageid});
   if (!message || message.length === 0)
@@ -1336,8 +1313,6 @@ client.on('raw', async function(event) {
               emoji !== unsubscribe_emoji)
             return;
 
-          //var parsed = parse_msg(message.content);
-          //console.log(parsed);
           var sent_message = await get_sent_message(event.d.message_id);
 
           if (sent_message.type !== "live" &&
@@ -1360,7 +1335,6 @@ client.on('raw', async function(event) {
               subscribe_user(event_user_id, star, "only");
             //console.log("sub");
           } else if (event.d.emoji.name === unsubscribe_emoji) {
-            //unsubscribe(event_user_id, parsed);
             var rules = await get_rules_for_user_account(event_user_id, account);
             if (rules && rules.length > 0) {
               rules.forEach(rule => {
