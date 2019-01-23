@@ -29,6 +29,427 @@ var self_userid;
 
 var subscribe_emoji = '✉';
 var unsubscribe_emoji = '❌';
+
+var msgs = {
+  command_helpsuffix: {
+    en: "*Type* `%%{help_command}` *for a list of commands*",
+    kr: "`%%{help_command}` *입력하시면 명령 목록을 표시합니다*"
+  },
+  help_command: {
+    en: "help",
+    kr: "도움말"
+  },
+  help_for_more_info: {
+    en: "use the `%%{help_command}` command for more information",
+    kr: "자세한 정보 보려면 `%%{help_command}` 입력하십시오"
+  },
+  help_for_more_info_upper: {
+    en: "Use the `%%{help_command}` command for more information",
+    kr: "%%{help_for_more_info}"
+  },
+  help_kr_header: {
+    en: "한국어 번역 보려면 `도움말` 입력하십시오",
+    kr: "저 (개발자) 외국인이라 오역이 있으면 죄송합니다 알려주시면 감사하겠습니다"
+  },
+  subscribedto: {
+    en: "Subscribed to **%%1**",
+    kr: "**%%1** 구독합니다"
+  },
+  alreadysubscribedto: {
+    en: "Already subscribed to **%%1**",
+    kr: "**%%1** 이미 구독합니다"
+  },
+  dm_subscribedto: "%%{subscribedto}%%{command_helpsuffix}",
+  discord_invite_msg: {
+    en: "*Join the LiveBot server here:* %%1",
+    kr: "*LiveBot 서버 초대 링크는* %%1"
+  },
+  removed_rule: {
+    en: "Removed rule #**%%1**",
+    kr: "구독 #**%%1** 취소합니다"
+  },
+  rule_not_found: {
+    en: "Rule #**%%1** not found",
+    kr: "구독 #**%%1** 찾지 못합니다"
+  },
+  unknown_error: {
+    en: "Unknown error",
+    kr: "알 수 없는 오류가 발생했습니다"
+  },
+  livebotadmin_needed: {
+    en: "You need the `LiveBotAdmin` role to modify the bot's settings for the guild",
+    kr: "이 서버에 대한 설정 변경하려면 `LiveBotAdmin`라는 역할 필요합니다"
+  },
+  unterminated_quote: {
+    en: "Unterminated quote?",
+    kr: "따옴표 누락되었습니다"
+  },
+  replays_help: {
+    en: [
+      "The `with_replays` argument determines whether or not replays are included. Possible values:",
+      "",
+      "    * `true`  - Subscribes to both livestreams and replays",
+      "    * `false` - Only subscribes to livestreams",
+      "    * `only`  - Only subscribes to replays"
+    ].join("\n"),
+    kr: [
+      "`다시보기포함` 속성에 가능한 값은",
+      "",
+      "    * `true`  - 라이브이랑 다시보기를 구독하기",
+      "    * `false` - 라이브만 구독하기",
+      "    * `only`  - 다시보기만 구독하기"
+    ].join("\n")
+  },
+  replays_needs_values: {
+    en: "The `with_replays` argument needs to be one of `true`, `false`, or `only`",
+    kr: "`다시보기포함` 속성에 가능한 값은 `true`, `false`, `only`입니다"
+  },
+  help_shorthelp: {
+    en: "This message",
+    kr: "이 메시지"
+  },
+  help_longhelp: {
+    en: [
+      "This message (and the commands) vary on whether you're contacting the bot via DM, or if you're in a server you own.",
+      "Commands sent in a DM affect personal notifications, while commands sent in a server will affect that server."
+    ].join("\n"),
+    kr: "DM으로 이 봇을 사용하시면 전송하신 명령은 개인적인 알림 변경하는데 서버로 사용하시면 서버의 알림 설정 번경합니다"
+  },
+  list_command: {
+    en: "list",
+    kr: "목록"
+  },
+  list_you_help: {
+    en: "Lists the lives you're currently subscribed to",
+    kr: "구독 표시하기"
+  },
+  list_server_help: {
+    en: "Lists the lives your server is currently subscribed to",
+    kr: "구독 표시하기"
+  },
+  subscribe_you_shorthelp: {
+    en: "Subscribes yourself to a person's lives or replays",
+    kr: "라이브 또는 다시보기를 구독하기"
+  },
+  subscribe_you_args: {
+    en: "group_and_member_name with_replays",
+    kr: "그룹과멤버이름 다시보기포함"
+  },
+  subscribe_command: {
+    en: "subscribe",
+    kr: "구독"
+  },
+  subscribe_you_examples: [
+    "%%{examples}",
+    "",
+    "       `%%{subscribe_command} 'snsd taeyeon' true`",
+    "       `%%{subscribe_command} \"girl's generation taeyeon\" true`",
+    "       `%%{subscribe_command} \"Girls Generation Taeyeon\" true`",
+    "       `%%{subscribe_command} '소녀시대 태연' true`",
+  ].join("\n"),
+  group_membername_help: {
+    en: "`group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
+    kr: "`그룹과멤버이름`에 여러 단어가 포함된 경우에는 단어 앞뒤에 따옴표를 사용하십시오. 공백과 글점 무시됩니다",
+  },
+  examples: {
+    en: "Examples:",
+    kr: "예시는"
+  },
+  subscribe_you_longhelp: [
+    "%%{group_membername_help}",
+    "",
+    "%%{replays_help}",
+    "",
+    "%%{subscribe_you_examples}"
+  ].join("\n"),
+  subscribe_guild_args: {
+    en: "channel_id group_and_member_name with_replays [ping_role_id]",
+    kr: "채널ID 그룹과멤버이름 다시보기포함 알림역할ID"
+  },
+  subscribe_guild_shorthelp: {
+    en: "Subscribes a channel to a person's lives or replays",
+    kr: "라이브 또는 다시보기를 구독하기"
+  },
+  subscribe_guild_examples: [
+    "%%{examples}",
+    "",
+    "       `%%{subscribe_command} 123456 'snsd taeyeon' true 7890`",
+    "       `%%{subscribe_command} 123456 \"girl's generation taeyeon\" true`",
+    "       `%%{subscribe_command} 123456 \"Girls Generation Taeyeon\" true 7890`",
+    "       `%%{subscribe_command} 123456 '소녀시대 태연' true`"
+  ].join("\n"),
+  find_channelid: {
+    en: "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'.",
+    kr: "`채널ID` 찾으려면 '개발자 모드' 사용하고 채널을 마우스 오른쪽 버튼으로 클릭하고 'ID 복사' 선택하십시오."
+  },
+  ping_role_help: {
+    en: [
+      "`ping_role_id` is optional, but if specified, the specified role will be pinged.",
+      "    To find the role ID, make sure the rule can be pinged, and write `\\@rolename`. After sending, if the message is `<@&12345>`, the role ID is `12345`."
+    ].join("\n"),
+    kr: [
+      "`알림역할ID` 선택사항인데 지정하면 선택된 역할 사용자들에게 알림 뜰 것 입니다.",
+      "    역할ID 찾으려면 '아무나 @mention을 허용' 사용하고 `\\@rolename` 입력하십시오. `<@&12345>` 보이면 역할 ID는 `12345` 입니다."
+    ].join("\n")
+  },
+  subscribe_guild_longhelp: [
+    "%%{find_channelid}\n",
+    "%%{group_membername_help}\n",
+    "%%{replays_help}\n",
+    "%%{ping_role_help}\n",
+    "%%{subscribe_guild_examples}"
+  ].join("\n"),
+  commands_available: {
+    en: "**Commands available:**\n\n",
+    kr: "**명령:**\n\n"
+  },
+  unsubscribe_args: {
+    en: "rule_id",
+    kr: "구독ID"
+  },
+  unsubscribe_shorthelp: {
+    en: "Removes a subscription",
+    kr: "구독 취소하기"
+  },
+  unsubscribe_command: {
+    en: "unsubscribe",
+    kr: "취소"
+  },
+  unsubscribe_examples: [
+    "%%{examples}",
+    "",
+    "       `%%{unsubscribe_command} 12345`"
+  ].join("\n"),
+  unsubscribe_longhelp: {
+    en: [
+      "The `rule_id` can be found using the `%%{list_command}` command",
+      "",
+      "%%{unsubscribe_examples}"
+    ].join("\n"),
+    kr: [
+      "`%%{list_command}` 입력하면 `구독ID` 찾을 수 있어요",
+      "",
+      "%%{unsubscribe_examples}"
+    ].join("\n")
+  },
+  at_least_n_arguments: {
+    en: "Needs at least %%1 arguments (%%{help_for_more_info})",
+    kr: "속성이 최소한 %%1개 필요합니다 (%%{help_for_more_info})"
+  },
+  invalid_with_replays: {
+    en: "Invalid value for `with_replays`.",
+    kr: "`다시보기포함` 잘못되었습니다."
+  },
+  forget_quotes: {
+    en: "Did you forget to add quotes around `group_and_member_name`? %%{help_for_more_info_upper}",
+    kr: "`그룹과멤버이름` 뒤앞에 따옴표를 잊었습니까? %%{help_for_more_info_upper}"
+  },
+  invalid_channel_id: {
+    en: "Invalid `channel_id` (make sure you copied the ID, not the name of the channel)",
+    kr: "`채널ID` 잘못되었습니다 (채널 이름 아니라 ID 입력하십시오)"
+  },
+  channel_id_not_exist: {
+    en: "The specified channel ID does not exist, or is not accessible by the bot",
+    kr: "지정된 채널 ID 존재하지 않습니다 또는 이 봇이 액세스할 수 없습니다"
+  },
+  invalid_role_id: {
+    en: "Invalid `role_id` (make sure you copied the ID, not the name of the role)",
+    kr: "`역할ID` 잘못되었습니다 (역학 이름 아니라 ID 입력하십시오)"
+  },
+  role_does_not_exist: {
+    en: "The specified role ID does not exist",
+    kr: "지정된 역할 ID 존재하지 않습니다"
+  },
+  unable_to_find_account: {
+    en: "Unable to find `%%1`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.",
+    kr: "`%%1` 찾을 수 없습니다.\n\n지정된 계정 DB에 있을 수 있는데 이 봇이 현재 액세스할 수 없습니다. LiveBot 서버에 `#account-suggestions` 채널에서 요청하십시오."
+  },
+  find_rule_id_help: {
+    en: "you can find this with the `%%{list_command}` command",
+    kr: "`%%{list_command}` 입력하시면 `구독ID` 찾을 수 있습니다"
+  },
+  needs_rule_id: {
+    en: "Needs `rule_id` (%%{find_rule_id_help})",
+    kr: "`구독ID` 필요합니다 (%%{find_rule_id_help})"
+  },
+  invalid_rule_id: {
+    en: "Invalid `rule_id` (this should be a number, %%{find_rule_id_help})",
+    kr: "`구독ID` 잘못되었습니다 (숫자여야 합니다. %%{find_rule_id_help})"
+  },
+  rule_does_not_exist: {
+    en: "Rule %%1 does not exist",
+    kr: "구독 ID %%1 존재하지 않습니다"
+  },
+  no_rules_found: {
+    en: "No rules found",
+    kr: "구독 없습니다"
+  },
+  rules: {
+    en: "Rules",
+    kr: "구독"
+  },
+  all_accounts: {
+    en: "all accounts",
+    kr: "모두"
+  },
+  list_pings_role: {
+    en: "pings %%1",
+    kr: "%%1에게 알림이 울립니다"
+  },
+  list_account_on_channel: {
+    en: "**%%1** on `#%%2`",
+    kr: "`#%%2`에서 **%%1**"
+  },
+  with_replays: {
+    en: "with replays",
+    kr: "라이브, 다시보기"
+  },
+  only_replays: {
+    en: "only replays",
+    kr: "다시보기"
+  },
+  no_replays: {
+    en: "no replays",
+    kr: "라이브"
+  },
+  unknown_command: {
+    en: "Unknown command (%%{help_for_more_info})",
+    kr: "잘못된 명령 (%%{help_for_more_info})"
+  },
+  lives: {
+    en: "lives",
+    kr: "라이브"
+  },
+  replays: {
+    en: "replays",
+    kr: "다시보기"
+  },
+  unsubscribed_from: {
+    en: "Unsubscribed from **%%1**'s %%2",
+    kr: "**%%1** %%2 구독 취소합니다"
+  },
+  nothing_to_unsubscribe: {
+    en: "Nothing to unsubscribe from",
+    kr: "그런 구독 없습니다"
+  },
+  instagram: {
+    en: "Instagram",
+    kr: "인스타그램"
+  },
+  periscope: {
+    en: "Periscope",
+    kr: "페리스코프"
+  },
+  noupload: {
+    en: "will likely not be uploaded",
+    kr: "다시보기 올리지 않을 것입니다"
+  },
+  is_live_on: {
+    en: "**%%1** is live on %%2",
+    kr: "**%%1** %%2에서 라이브 시작합니다"
+  },
+  replay_of: {
+    en: "Replay of **%%1**'s %%2 livestream",
+    kr: "**%%1** %%2에서 하셨던 라이브 다시보기"
+  },
+  emoji_subscribe: {
+    en: "Use " + subscribe_emoji + " to subscribe to future %%1 by this person",
+    kr: subscribe_emoji + " 클릭하시면 이 분의 %%1를 앞으로 알려줄 것입니다"
+  },
+  emoji_unsubscribe: {
+    en: "Use " + unsubscribe_emoji + " to unsubscribe to future %%1 by this person",
+    kr: unsubscribe_emoji + " 클릭하시면 이 분의 %%1를 구독 취소합니다"
+  }
+};
+
+function _(lang, id) {
+  if (lang === "both") {
+    var args = Array.from(arguments).slice(1);
+    args.unshift("en");
+    var en = _.apply(null, args);
+    args[0] = "kr";
+    return en + "\n" + _.apply(null, args);
+  }
+
+  if (lang !== "en" && lang !== "kr") {
+    console.log("Warning: _(" + lang + ", " + id + "): lang is not en or kr");
+    lang = "en";
+  }
+
+  if (!(id in msgs)) {
+    console.log("Error: _(" + lang + ", " + id + "): id not in msgs");
+    return "";
+  }
+
+  var in_command = false;
+  var in_bracket = false;
+  var out = "";
+  var msg = msgs[id];
+  if (typeof msg === "object")
+    msg = msg[lang];
+
+  for (var i = 0; i < msg.length; i++) {
+    var c = msg[i];
+
+    if (in_command !== false) {
+      if (i - in_command === 1) {
+        if (c === "%") {
+          out += "%";
+          in_command = false;
+        } else if (c === "{") {
+          in_bracket = true;
+        } else if (!isNaN(parseInt(c))) {
+          var arg = arguments[parseInt(c) + 1];
+
+          if (c === "0") {
+            console.log("Warning: _(" + lang + ", " + id + "): argument #" + parseInt(c) + " cannot be used");
+            arg = "[undefined]";
+          }
+
+          if (arg === undefined) {
+            console.log("Warning: _(" + lang + ", " + id + "): argument #" + parseInt(c) + " is undefined");
+            arg = "[undefined]";
+          }
+
+          if (typeof arg !== "string" && typeof arg !== "number") {
+            console.log("Warning: _(" + lang + ", " + id + "): argument #" + parseInt(c) + " is not a string or number");
+            arg = "[error]";
+          }
+
+          out += arg;
+
+          in_command = false;
+        } else {
+          console.log("Warning: _(" + lang + ", " + id + "): invalid command in msg string");
+          in_command = false;
+        }
+      } else if (in_bracket) {
+        if (c === "}") {
+          out += _(lang, msg.substr(in_command + 2, i - in_command - 2));
+          in_command = false;
+        }
+      } else {
+        console.log("Warning: _(" + lang + ", " + id + "): you shouldn't see this");
+      }
+
+      continue;
+    }
+
+    if (c === "%") {
+      if (i > 0 && msg[i-1] === "%") {
+        in_command = i;
+        in_bracket = false;
+      }
+
+      continue;
+    }
+
+    out += c;
+  }
+
+  return out;
+}
+
 var dm_helptext = "\n\n*Type `help` for a list of commands*";
 
 async function get_sent_message(messageid) {
@@ -729,23 +1150,47 @@ function sanitize_id(id) {
   if (typeof id !== "string")
     throw "id is not a string";
 
+  if (id.match(/^<!?[#@]([0-9]+)>$/))
+    return id.replace(/^<!?[#@]([0-9]+)>$/, "$1");
+
   if (!id.match(/^\s*[0-9]+\s*$/))
     throw "id is not a number";
 
   return id.replace(/\s*/g, "");
 }
 
-function get_subscribe_name(account) {
+function get_subscribe_name(lang, account) {
   var text = "undefined";
 
   if (account === "*")
-    text = "all accounts";
-  else if (account.name)
+    text = _(lang, "all_accounts");
+  else if (lang === "en" && account.name)
     text = account.name;
+  else if (lang === "kr" && account.name_kr)
+    text = account.name_kr;
   else if (account.username)
     text = "@" + account.username;
 
   return text;
+}
+
+function subscribed_msg(was_subscribed, account, show_help) {
+  var help_en = "";
+  var help_kr = "";
+  if (show_help) {
+    help_en = _("en", "command_helpsuffix");
+    help_kr = _("kr", "command_helpsuffix");
+  }
+
+  if (!was_subscribed) {
+    return _("en", "subscribedto", get_subscribe_name("en", account)) + "\n" +
+      _("kr", "subscribedto", get_subscribe_name("kr", account)) + "\n\n" +
+      help_en + "\n" + help_kr;
+  } else {
+    return _("en", "alreadysubscribedto", get_subscribe_name("en", account)) + "\n" +
+      _("kr", "alreadysubscribedto", get_subscribe_name("kr", account)) + "\n\n" +
+      help_en + "\n" + help_kr;
+  }
 }
 
 async function subscribe_user(userid, account, replays) {
@@ -755,9 +1200,11 @@ async function subscribe_user(userid, account, replays) {
   var output = await create_rule(options);
 
   if (output[1])
-    senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+    //senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+    senddm(userid, subscribed_msg(false, account, true));
   else
-    senddm(userid, "Already subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+    //senddm(userid, "Already subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
+    senddm(userid, subscribed_msg(true, account, true));
 }
 
 async function subscribe_channel(message, guild, channel_id, account, replays, pings) {
@@ -770,15 +1217,17 @@ async function subscribe_channel(message, guild, channel_id, account, replays, p
 
   if (message) {
     if (output[1])
-      message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
+      //message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
+      message.reply(subscribed_msg(false, account, false));
     else
-      message.reply("Already subscribed to **" + get_subscribe_name(account) + "**");
+      //message.reply("Already subscribed to **" + get_subscribe_name(account) + "**");
+      message.reply(subscribed_msg(true, account, false));
   }
 }
 
-function discord_invite_msg(userid) {
+function discord_invite_msg(lang, userid) {
   if (!bot_guild.members.get(userid)) {
-    return "*Join the LiveBot server here: " + config.parsed.DISCORD_INVITE_LINK + "*";
+    return _(lang, "discord_invite_msg", config.parsed.DISCORD_INVITE_LINK);
   }
 
   return "";
@@ -789,9 +1238,11 @@ async function unsubscribe(message, ruleid) {
     var removed = await remove_rule(ruleid, "unsubscribe_func");
     if (message) {
       if (removed && removed.result.n > 0) {
-        message.reply("Removed rule **" + ruleid + "**");
+        message.reply(_("en", "removed_rule", ruleid) + "\n" +
+                      _("kr", "removed_rule", ruleid));
       } else {
-        message.reply("Rule **" + ruleid + "** not found");
+        message.reply(_("en", "rule_not_found", ruleid) + "\n" +
+                      _("kr", "rule_not_found", ruleid));
       }
     }
   } catch (e) {
@@ -874,7 +1325,8 @@ client.on('message', async message => {
     }
 
     if (message.author.id !== message.guild.ownerID) {
-      message.reply("You need the `LiveBotAdmin` role to modify the bot's settings for the guild");
+      //message.reply("You need the `LiveBotAdmin` role to modify the bot's settings for the guild");
+      message.reply(_("both", "livebotadmin_needed"));
       return;
     }
   }
@@ -912,7 +1364,8 @@ client.on('message', async message => {
       var regex = new RegExp("^" + quote + "(.*?)" + quote + "\\s*([\\s\\S]*)$");
       match = newmsg.match(regex);
       if (!match) {
-        message.reply("Unterminated quote?");
+        //message.reply("Unterminated quote?");
+        message.reply(_("both", "unterminated_quote"));
         return;
       }
     }
@@ -936,73 +1389,57 @@ client.on('message', async message => {
 
   var commands = {
     "help": {
+      command: "help_command",
       emoji: "❓",
-      shorthelp: "This message",
-      longhelp: [
-        "This message (and the commands) vary on whether you're contacting the bot via DM, or if you're in a server you own.",
-        "Commands sent in a DM affect personal notifications, while commands sent in a server will affect that server."
-      ].join("\n")
+      shorthelp: "help_shorthelp",
+      longhelp: "help_longhelp"
     },
     "list": {
+      command: "list_command",
       emoji: "📝",
-      shorthelp: "Lists the lives " + youre + " currently subscribed to"
+      shorthelp: is_user ? "list_you_help" : "list_server_help"
     },
     "subscribe": {
+      command: "subscribe_command",
       emoji: subscribe_emoji,
-      sample_args: "group_and_member_name with_replays",
-      shorthelp: "Subscribes yourself to a person's lives",
-      longhelp: [
-        "The group and member name needs to be quoted, but spacing, punctuation, and casing is ignored.",
-        "",
-        replays_help,
-        "",
-        "Examples:",
-        "",
-        "       `subscribe 'snsd taeyeon' true`",
-        "       `subscribe \"girl's generation taeyeon\" true`",
-        "       `subscribe \"Girls Generation Taeyeon\" true`",
-        "       `subscribe '소녀시대 태연' true`",
-      ].join("\n")
+      sample_args: "subscribe_you_args",
+      shorthelp: "subscribe_you_shorthelp",
+      longhelp: "subscribe_you_longhelp"
     },
     "unsubscribe": {
+      command: "unsubscribe_command",
       emoji: unsubscribe_emoji,
-      sample_args: "rule_id",
-      shorthelp: "Removes a subscription",
-      longhelp: [
-        "The `rule_id` can be found using the `list` command",
-        "",
-        "Examples:",
-        "",
-        "       `unsubscribe 12345`"
-      ].join("\n")
+      sample_args: "unsubscribe_args",
+      shorthelp: "unsubscribe_shorthelp",
+      longhelp: "unsubscribe_longhelp"
     }
   };
 
   if (!is_user) {
-    commands.subscribe.sample_args = "channel_id group_and_member_name with_replays [ping_role_id]";
-    commands.subscribe.shorthelp = "Subscribes a channel to a person's lives";
-    commands.subscribe.longhelp = [
-      "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'",
-      "",
-      "The `group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
-      "",
-      replays_help,
-      "",
-      "`ping_role_id` is optional, but if specified, the specified role will be pinged.",
-      "    To find the role ID, make sure the rule can be pinged, and write `\\@rolename`. After sending, if the message is `<@&12345>`, the role ID is `12345`.",
-      "",
-      "Examples:",
-      "",
-      "       `subscribe 123456 'snsd taeyeon' true 7890`",
-      "       `subscribe 123456 \"girl's generation taeyeon\" true`",
-      "       `subscribe 123456 \"Girls Generation Taeyeon\" true 7890`",
-      "       `subscribe 123456 '소녀시대 태연' true`",
-    ].join("\n");
+    commands.subscribe.sample_args = "subscribe_guild_args";
+    commands.subscribe.shorthelp = "subscribe_guild_shorthelp";
+    commands.subscribe.longhelp = "subscribe_guild_longhelp";
+  }
+
+  var kr_command = false;
+  var lang = "en";
+  var orig_command = command;
+  command = "invalid";
+  for (var cmd in commands) {
+    if (orig_command === _("en", commands[cmd].command)) {
+      command = cmd;
+      break;
+    } else if (orig_command === _("kr", commands[cmd].command)) {
+      kr_command = true;
+      lang = "kr";
+      command = cmd;
+      break;
+    }
   }
 
   switch (command) {
   case "help":
-    var reply = "**Commands available:**\n\n";
+    var reply = "*" + _(lang, "help_kr_header") + "*\n\n" + _(lang, "commands_available");
 
     for (var cmd in commands) {
       var text = "";
@@ -1011,34 +1448,35 @@ client.on('message', async message => {
       if (ccmd.emoji)
         text += ccmd.emoji + " ";
 
-      text += "`" + cmd;
+      text += "`" + _(lang, ccmd.command);
 
       if (ccmd.sample_args)
-        text += " " + ccmd.sample_args;
+        text += " " + _(lang, ccmd.sample_args);
 
       text += "`";
 
       if (ccmd.shorthelp)
-        text += " - " + ccmd.shorthelp;
+        text += " - " + _(lang, ccmd.shorthelp);
 
       text += "\n\n";
 
       if (ccmd.longhelp)
-        text += ccmd.longhelp + "\n\n";
+        text += _(lang, ccmd.longhelp) + "\n\n";
 
       text = text.replace(/\s*$/, "") + "\n\n\n";
 
       reply += text;
     }
 
-    reply += discord_invite_msg(message.author.id);
+    reply += discord_invite_msg("en", message.author.id);
 
     message.reply(reply);
     break;
   case "subscribe":
     arglength = is_user ? 3 : 4;
     if (args.length < arglength) {
-      return message.reply("Needs at least " + arglength + " arguments (use the `help` command for more information)");
+      //return message.reply("Needs at least " + arglength + " arguments (use the `help` command for more information)");
+      return message.reply(_(lang, "at_least_n_arguments", arglength));
     }
 
     var star_search = is_user ? args[1] : args[2];
@@ -1047,12 +1485,17 @@ client.on('message', async message => {
     if (replays !== "true" &&
         replays !== "false" &&
         replays !== "only") {
-      var memberhelp = " (use the `help` command for more information)";
+      //var memberhelp = " (use the `help` command for more information)";
+      var memberhelp = _(lang, "help_for_more_info_upper");
       if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
-        memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
+        //memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
+        memberhelp = _(lang, "forget_quotes");
       }
 
-      return message.reply("The `with_replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
+      //return message.reply("The `with_replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
+      return message.reply(
+        _(lang, "invalid_with_replays") + " " + memberhelp + "\n\n" + _(lang, "replays_help")
+      );
     }
 
     if (replays === "true")
@@ -1071,7 +1514,8 @@ client.on('message', async message => {
       }
 
       if (!ok) {
-        return message.reply("Invalid `channel_id` (make sure you copied the ID, not the name of the channel)");
+        //return message.reply("Invalid `channel_id` (make sure you copied the ID, not the name of the channel)");
+        return message.reply(_(lang, "invalid_channel_id"));
       }
 
       if (!message.guild) {
@@ -1079,7 +1523,8 @@ client.on('message', async message => {
       }
 
       if (!message.guild.channels.get(channel_id)) {
-        return message.reply("Channel ID '" + channel_id + "' does not exist, or is not accessable by the bot");
+        //return message.reply("Channel ID '" + channel_id + "' does not exist, or is not accessible by the bot");
+        return message.reply(_(lang, "channel_id_not_exist"));
       }
     }
 
@@ -1095,7 +1540,8 @@ client.on('message', async message => {
         } catch (e) {}
 
         if (!ok) {
-          return message.reply("Invalid `role_id`");
+          //return message.reply("Invalid `role_id`");
+          return message.reply(_(lang, "invalid_role_id"));
         }
 
         if (!message.guild) {
@@ -1103,7 +1549,8 @@ client.on('message', async message => {
         }
 
         if (!message.guild.roles.get(ping)) {
-          return message.reply("Role ID '" + ping + "' does not exist");
+          //return message.reply("Role ID '" + ping + "' does not exist");
+          return message.reply(_(lang, "role_does_not_exist"));
         }
 
         pings.push(ping);
@@ -1118,9 +1565,10 @@ client.on('message', async message => {
       if (!star) {
         star = await find_star({username: star_search, site: "instagram"});
         if (!star) {
-          var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
+          //var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
+          var text = _(lang, "unable_to_find_account", star_search);
 
-          var invite_msg = discord_invite_msg(message.author.id);
+          var invite_msg = discord_invite_msg(lang, message.author.id);
           if (invite_msg)
             text += "\n\n" + invite_msg;
 
@@ -1137,7 +1585,8 @@ client.on('message', async message => {
     break;
   case "unsubscribe":
     if (args.length < 2) {
-      return message.reply ("Needs `rule_id` (use the `list` command to find rules you are subscribed to)");
+      //return message.reply ("Needs `rule_id` (use the `list` command to find rules you are subscribed to)");
+      return message.reply(_(lang, "needs_rule_id"));
     }
 
     var rule_id = args[1];
@@ -1150,10 +1599,11 @@ client.on('message', async message => {
     }
 
     if (!ok) {
-      return message.reply("Invalid `rule_id` (this should be a number, you can find subscribed rules using the `list` command)");
+      //return message.reply("Invalid `rule_id` (this should be a number, you can find subscribed rules using the `list` command)");
+      return message.reply(_(lang, "invalid_rule_id"));
     }
 
-    var query = {rule: rule_id};
+    var query = {rule_id: rule_id};
 
     if (is_user) {
       query.user = message.author.id;
@@ -1161,9 +1611,10 @@ client.on('message', async message => {
       query.guild = message.guild.id;
     }
 
-    var rule = await db_rules.find();
-    if (!rule) {
-      return message.reply("Rule " + rule_id + " does not exist");
+    var rule = await db_rules.find(query);
+    if (!rule || rule.length === 0) {
+      //return message.reply("Rule " + rule_id + " does not exist");
+      return message.reply(_(lang, "rule_does_not_exist", rule_id));
     }
 
     unsubscribe(message, rule_id);
@@ -1178,10 +1629,10 @@ client.on('message', async message => {
     }
 
     if (!rules || rules.length === 0) {
-      return message.reply("No rules found");
+      return message.reply(_(lang, "no_rules_found"));
     }
 
-    var message_text = "**Rules**\n\n";
+    var message_text = "**" + _(lang, "rules") + "**\n\n";
 
     for (var i = 0; i < rules.length; i++) {
       var rule = rules[i];
@@ -1190,26 +1641,29 @@ client.on('message', async message => {
       var account_name = "";
 
       if (rule.all) {
-        account_name = "all accounts";
+        account_name = _(lang, "all_accounts");
       } else if (rule.star_id) {
         var star = await find_star_by_id(rule.star_id);
         if (!star) {
           account_name = "undefined";
         } else {
-          account_name = star.name;
+          if (lang === "en")
+            account_name = star.name;
+          else if (lang === "kr")
+            account_name = star.name_kr;
         }
       } else if (rule.account_id) {
         var accounts = await db_accounts.find({account_id: rule.account_id});
         if (!accounts || accounts.length === 0) {
           account_name = "undefined";
         } else {
-          account_name = account.username;
+          account_name = "@" + account.username;
         }
       }
 
-      text += "**" + account_name + "**";
-
-      if (!is_user) {
+      if (is_user) {
+        text += "**" + account_name + "**";
+      } else  {
         var channel_name = "";
         var guild = client.guilds.get(rule.guild);
         var ping_text = "";
@@ -1224,27 +1678,32 @@ client.on('message', async message => {
           }
 
           if (rule.ping_roles && rule.ping_roles.length > 0) {
-            ping_text += ", pings ";
+            ping_text += ", ";
+            var pingroles = [];
             for (var j = 0; j < rule.ping_roles.length; j++) {
               var role = guild.roles.get(rule.ping_roles[j]);
               var rolename = "undefined-role";
               if (role) {
                 rolename = role.name;
               }
-              ping_text += " `@" + rolename + "`";
+              pingroles.push("`@" + rolename + "`");
             }
+
+            ping_text += _(lang, "list_pings_role", pingroles.join(", "));
           }
         }
 
-        text += " on `#" + channel_name + "`" + ping_text;
+        //text += " on `#" + channel_name + "`" + ping_text;
+        text += _(lang, "list_account_on_channel", account_name, channel_name);
+        text += ping_text;
       }
 
       if (rule.replays === true) {
-        text += " (with replays)";
+        text += " (" + _(lang, "with_replays") + ")";
       } else if (rule.replays === "only") {
-        text += " (only replays)";
+        text += " (" + _(lang, "only_replays") + ")";
       } else if (rule.replays === false) {
-        text += " (no replays)";
+        text += " (" + _(lang, "no_replays") + ")";
       }
 
       message_text += text + "\n";
@@ -1279,7 +1738,8 @@ client.on('message', async message => {
     message.reply(reply_text);
     break;
   default:
-    message.reply("Unknown command (use the `help` command for more information)");
+    //message.reply("Unknown command (use the `help` command for more information)");
+    message.reply(_("both", "unknown_command"));
     break;
   }
 });
@@ -1346,9 +1806,25 @@ client.on('raw', async function(event) {
                     remove_rule(rule.rule_id, "emoji");
                 }
               });
-              senddm(event_user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
+              var name_en = star.name;
+              var name_kr = star.name_kr;
+              var type_en = "";
+              var type_kr = "";
+              if (sent_message.type === "live") {
+                type_en = _("en", "lives");
+                type_kr = _("kr", "lives");
+              } else if (sent_message.type === "replay") {
+                type_en = _("en", "replays");
+                type_kr = _("kr", "replays");
+              }
+
+              senddm(event_user_id,
+                     _("en", "unsubscribed_from", name_en, type_en) + "\n" +
+                     _("kr", "unsubscribed_from", name_kr, type_kr));
+              //senddm(event_user_id, "Unsubscribed from **" + star.name + "**'s " + sent_message.type + "s");
             } else {
-              senddm(event_user_id, "Nothing to unsubscribe from");
+              //senddm(event_user_id, "Nothing to unsubscribe from");
+              senddm(event_user_id, _("both", "nothing_to_unsubscribe"));
             }
             //console.log("unsub");
           }
@@ -1409,32 +1885,55 @@ async function send_message(body) {
   var sitename = "";
   switch (body.site) {
   case "instagram":
-    sitename = "Instagram";
+    sitename = "instagram";
     break;
   case "periscope":
-    sitename = "Periscope";
+    sitename = "periscope";
     break;
   }
 
   if (body.type === "live" ||
       body.type === "replay") {
-    var noupload_msg = "";
+    var noupload_msg_en = "";
+    var noupload_msg_kr = "";
     if (true) {
       if (body.noupload || body.group_noupload) {
-        noupload_msg = " *(will likely not be uploaded)*";
+        //noupload_msg = " *(will likely not be uploaded)*";
+        noupload_msg_en = " *(" + _("en", "noupload") + ")*";
+        noupload_msg_kr = " *(" + _("kr", "noupload") + ")*";
       }
     }
 
-    var message_text, subscribe_msg, unsubscribe_msg;
+    var message_text, message_text, subscribe_msg, unsubscribe_msg;
 
     if (body.type === "live") {
-      message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
-      subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future lives by this person*";
-      unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe from future lives by this person*";
+      //message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
+      var message_text_en = _("en", "is_live_on", body.name, _("en", sitename)) + noupload_msg_en;
+      var message_text_kr = _("kr", "is_live_on", body.name_kr, _("kr", sitename)) + noupload_msg_kr;
+      message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.watch_link + "\n\n";
+
+      //subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future lives by this person*";
+      subscribe_msg =
+        _("en", "emoji_subscribe", _("en", "lives")) + "\n" +
+        _("kr", "emoji_subscribe", _("kr", "lives"));
+      //unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe from future lives by this person*";
+      unsubscribe_msg =
+        _("en", "emoji_unsubscribe", _("en", "lives")) + "\n" +
+        _("kr", "emoji_unsubscribe", _("kr", "lives"));
     } else if (body.type === "replay") {
-      message_text = "Replay of **" + body.name + "**'s " + sitename + " livestream\n\n" + body.broadcast_guid + "\n\n";
-      subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future replays by this person*";
-      unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe to future replays by this person*";
+      //message_text = "Replay of **" + body.name + "**'s " + sitename + " livestream\n\n" + body.broadcast_guid + "\n\n";
+      var message_text_en = _("en", "replay_of", body.name, _("en", sitename));
+      var message_text_kr = _("kr", "replay_of", body.name_kr, _("kr", sitename));
+      message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.broadcast_guid + "\n\n";
+
+      //subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future replays by this person*";
+      //unsubscribe_msg = "*Use " + unsubscribe_emoji + " to unsubscribe to future replays by this person*";
+      subscribe_msg =
+        _("en", "emoji_subscribe", _("en", "replays")) + "\n" +
+        _("kr", "emoji_subscribe", _("kr", "replays"));
+      unsubscribe_msg =
+        _("en", "emoji_unsubscribe", _("en", "replays")) + "\n" +
+        _("kr", "emoji_unsubscribe", _("kr", "replays"));
     }
 
     var account = await find_account(body);
