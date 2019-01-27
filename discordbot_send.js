@@ -78,7 +78,8 @@ function can_share(member, account) {
   if (!member || member.family)
     return false;
 
-  if (member.bot_whitelist === true) {
+  //if (member.bot_whitelist === true) {
+  if (account.bot_whitelist === true) {
     return true;
   }
 
@@ -99,6 +100,7 @@ function can_share(member, account) {
       if (added_at) {
         var diff = Date.now() - added_at;
         //console.log(diff, delay);
+        //console.log((diff - delay) / 1000 / 60 / 60 / 24);
         if (diff <= time_low || diff < delay)
           return false;
       }
@@ -288,7 +290,8 @@ function process_add_account() {
         continue;
 
       if (member.group !== accountname &&
-          member.member_name_kr !== accountname)
+          member.member_name_kr !== accountname &&
+          (!member.alt_groups || member.alt_groups.indexOf(accountname) < 0))
         continue;
 
       for (var j = 0; j < member.accounts.length; j++) {
@@ -302,7 +305,8 @@ function process_add_account() {
           accounts.push({
             type: "account",
             site: "instagram",
-            username: account.username
+            username: account.username,
+            can_share: can_share(member, account)
           });
         }
       }

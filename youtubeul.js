@@ -196,6 +196,10 @@ function upload_video_yt(options) {
         id: options.youtube_id,
         part: 'id,snippet,status,localizations'
       }, function(err, data) {
+        if (err) {
+          console.log(err);
+        }
+
         var result = data.items[0];
 
         console.dir(result);

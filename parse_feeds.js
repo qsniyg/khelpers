@@ -451,6 +451,8 @@ function get_name(text, member) {
       var newalt = feeds_toml[key];
       for (var akey in newalt) {
         alt[akey] = newalt[akey];
+        if (akey === "bot_whitelist")
+          account.bot_whitelist = newalt[akey];
       }
     }
   });
@@ -695,7 +697,8 @@ function parse_member(obj, options) {
     member.playlist = name.playlist;
     member.use_fullname = name.use_fullname;
     member.hide_group = name.hide_group;
-    member.bot_whitelist = name.bot_whitelist;
+    if (name.bot_whitelist !== undefined)
+      member.bot_whitelist = name.bot_whitelist;
   }
 
 
@@ -1039,16 +1042,20 @@ function merge_members(member1, member2) {
   var newmember = member1;
 
   var i, j;
-  for (j = 0; j < member2.nicks.length; j++) {
-    upush(newmember.nicks, member2.nicks[j]);
-    /*if (newmember.nicks.indexOf(member2.nicks[j]) < 0)
-      newmember.nicks.push(member2.nicks[j]);*/
+  if (member2.nicks) {
+    for (j = 0; j < member2.nicks.length; j++) {
+      upush(newmember.nicks, member2.nicks[j]);
+      /*if (newmember.nicks.indexOf(member2.nicks[j]) < 0)
+        newmember.nicks.push(member2.nicks[j]);*/
+    }
   }
 
-  for (j = 0; j < member2.names.length; j++) {
-    upush(newmember.names, member2.names[j]);
-    /*if (newmember.names.indexOf(member2.names[j]) < 0)
-      newmember.names.push(member2.names[j]);*/
+  if (member2.names) {
+    for (j = 0; j < member2.names.length; j++) {
+      upush(newmember.names, member2.names[j]);
+      /*if (newmember.names.indexOf(member2.names[j]) < 0)
+        newmember.names.push(member2.names[j]);*/
+    }
   }
 
   var common = [];
@@ -1163,7 +1170,34 @@ function do_sns(site) {
     //console.log("");
   }
 
-  if (module.exports.members) {
+  if (!module.exports.members)
+    module.exports.members = [];
+
+  members.forEach((member) => {
+    if (!member)
+      return;
+
+    if (!members_by_group[member.group])
+      members_by_group[member.group] = [];
+  });
+
+  module.exports.members.forEach((member) => {
+    if (!member)
+      return;
+
+    if (!members_by_group[member.group])
+      members_by_group[member.group] = [];
+
+    members_by_group[member.group].push(member);
+  });
+
+  function add_member(member) {
+    module.exports.members.push(member);
+    if (member.group && members_by_group[member.group])
+      members_by_group[member.group].push(member);
+  }
+
+  if (module.exports.members || true) {
     members.forEach((member) => {
       if (!member)
         return;
@@ -1171,7 +1205,10 @@ function do_sns(site) {
       if (member.group in members_by_group) {
         var found = false;
         members_by_group[member.group].forEach((gmember) => {
-          if (found)
+          if (gmember === member)
+            return;
+
+          if (found && false)
             return;
 
           if (!same_member(gmember, member))
@@ -1193,7 +1230,7 @@ function do_sns(site) {
         });
 
         if (!found)
-          module.exports.members.push(member);
+          add_member(member);
       } else {
         module.exports.members.push(member);
       }
@@ -1202,15 +1239,17 @@ function do_sns(site) {
     module.exports.members = members;
   }
 
-  module.exports.members.forEach((member) => {
-    if (!member)
-      return;
+  if (false) {
+    module.exports.members.forEach((member) => {
+      if (!member)
+        return;
 
-    if (!members_by_group[member.group])
-      members_by_group[member.group] = [];
+      if (!members_by_group[member.group])
+        members_by_group[member.group] = [];
 
-    members_by_group[member.group].push(member);
-  });
+      members_by_group[member.group].push(member);
+    });
+  }
 
   return members;
 }

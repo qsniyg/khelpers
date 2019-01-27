@@ -625,10 +625,13 @@ function find_star(properties) {
         if (account) {
           return find_star_by_id(account.star_id).then(
             item => {
-              if (!item)
-                resolve(null);
-              else
+              if (!item) {
+                console.log("Invalid star_id for account:");
+                console.log(account);
+                reject("invalid_account_star_id");
+              } else {
                 resolve(item);
+              }
             },
             err => {
               reject(err);
