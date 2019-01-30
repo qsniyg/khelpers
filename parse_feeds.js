@@ -636,8 +636,6 @@ function upush(array, item) {
       upush(array, x);
     });
   } else {
-    /*if (array.indexOf(item) < 0)
-      array.push(item);*/
     var sitem = JSON.stringify(item);
     for (var i = 0; i < array.length; i++) {
       if (sitem === JSON.stringify(array[i])) {
@@ -645,6 +643,22 @@ function upush(array, item) {
       }
     }
     array.push(item);
+  }
+}
+
+function uunshift(array, item) {
+  if (item instanceof Array) {
+    item.forEach((x) => {
+      uunshift(array, x);
+    });
+  } else {
+    var sitem = JSON.stringify(item);
+    for (var i = 0; i < array.length; i++) {
+      if (sitem === JSON.stringify(array[i])) {
+        return;
+      }
+    }
+    array.unshift(item);
   }
 }
 
@@ -1044,10 +1058,23 @@ function merge_members(member1, member2) {
   var i, j;
   if (member2.nicks) {
     for (j = 0; j < member2.nicks.length; j++) {
-      upush(newmember.nicks, member2.nicks[j]);
+      if (member2.has_user_nick)
+        uunshift(newmember.nicks, member2.nicks[j]);
+      else
+        upush(newmember.nicks, member2.nicks[j]);
       /*if (newmember.nicks.indexOf(member2.nicks[j]) < 0)
         newmember.nicks.push(member2.nicks[j]);*/
     }
+  }
+
+  if (member2.has_user_nick) {
+    newmember.nicks_roman_first = member2.nicks_roman_first;
+    newmember.nicks_hangul_first = member2.nicks_hangul_first;
+    newmember.member_name_kr = member2.member_name_kr;
+    newmember.member_name = member2.member_name;
+    newmember.title = member2.title;
+    newmember.title_kr = member2.title_kr;
+    newmember.has_user_nick = member2.has_user_nick;
   }
 
   if (member2.names) {
