@@ -766,6 +766,20 @@ function create_search(properties) {
     }
   }
 
+  if ("names" in properties && properties.names && properties.names instanceof Array) {
+    for (var i = 0; i < properties.names.length; i++) {
+      var name = properties.names[i];
+
+      if (name.hangul) {
+        korean_member_names.push(name.hangul);
+      }
+
+      if (name.roman) {
+        extend_with_possible_array(roman_member_names, name.roman);
+      }
+    }
+  }
+
   roman_groups.forEach(group => {
     roman_member_names.forEach(name => {
       search.push(group + " " + name);
@@ -1305,13 +1319,17 @@ client.on('guildCreate', guild => {
 });
 
 client.on('message', async message => {
-  if (message.author.id === self_userid ||
+  if (!message || !message.content ||
+      message.author.id === self_userid ||
       message.author.bot)
     return;
 
   var msg = message.content
       .replace(/^\s*/, "")
       .replace(/\s*$/, "");
+
+  if (!msg)
+    return;
 
   if (message.channel.type !== "dm" &&
       !msg.startsWith("<@" + self_userid + ">") &&
@@ -1343,7 +1361,7 @@ client.on('message', async message => {
   }
   msg = newmsg;
 
-  console.log(msg);
+  console.log(message.author.id, msg);
 
   var newmsg = msg
       .replace(/[“”]/g, '"')
@@ -1428,6 +1446,8 @@ client.on('message', async message => {
   var lang = "en";
   var orig_command = command;
   command = "invalid";
+  if (orig_command === "role")
+    command = "role";
   for (var cmd in commands) {
     if (orig_command === _("en", commands[cmd].command)) {
       command = cmd;

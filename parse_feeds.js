@@ -517,6 +517,10 @@ function get_name(text, member) {
     ret.bot_whitelist = alt.bot_whitelist;
   }
 
+  if ("tags" in alt) {
+    ret.tags = alt.tags;
+  }
+
   if (text[0] === "@") {
     if (ret.names.length > 0 || ret.nicks.length > 0/*text in feeds_toml*/) {
       /*var alt = feeds_toml[text];
@@ -703,16 +707,27 @@ function parse_member(obj, options) {
     member.nicks = name.nicks;
     member.has_user_nick = name.has_user_nick;
     member.eng_kr_name = name.eng_kr_name;
-    member.alt_groups = name.alt_groups;
-    member.noupload = name.noupload;
-    member.description_template = name.description_template;
-    member.old_usernames = name.old_usernames;
-    member.upload_privacy = name.upload_privacy;
-    member.playlist = name.playlist;
-    member.use_fullname = name.use_fullname;
-    member.hide_group = name.hide_group;
+    if (name.alt_groups !== undefined)
+      member.alt_groups = name.alt_groups;
+    if (name.noupload !== undefined)
+      member.noupload = name.noupload;
+    if (name.description_template !== undefined)
+      member.description_template = name.description_template;
+    if (name.old_usernames !== undefined)
+      member.old_usernames = name.old_usernames;
+    if (name.upload_privacy !== undefined)
+      member.upload_privacy = name.upload_privacy;
+    if (name.playlist !== undefined)
+      member.playlist = name.playlist;
+    if (name.use_fullname !== undefined)
+      member.use_fullname = name.use_fullname;
+    if (name.hide_group !== undefined)
+      member.hide_group = name.hide_group;
     if (name.bot_whitelist !== undefined)
       member.bot_whitelist = name.bot_whitelist;
+    if (name.tags !== undefined && name.tags.length > 0) {
+      member.user_tags = name.tags;
+    }
   }
 
 
@@ -920,6 +935,9 @@ function parse_member(obj, options) {
     }
   }
 
+  if (member.user_tags)
+    upush(member.tags, member.user_tags);
+
   member.member_name_kr = korean_member_name;
   member.member_name = member_name;
 
@@ -978,7 +996,7 @@ function parse_member(obj, options) {
   member.title = strip(title);
 
   var title_kr = "";
-  if (member.group) {
+  if (member.group && !member.hide_group) {
     var kr_ex = "";
     var kr_ex1 = "";
     if (member.ex && !member.haitus) {

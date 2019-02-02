@@ -248,13 +248,14 @@ function process_replays(parsed) {
   for (var i = 0; i < parsed.entries.length; i++) {
     var entry = parsed.entries[i];
 
-    if (!entry.caption.match(/Instagram Live *[0-9]* *\[[0-9]{6}\] *$/)) {
+    if (!entry.caption.match(/Instagram Live *[0-9/]* *\[[0-9]{6}\] *$/)) {
       continue;
     }
 
-    var username = entry.description.match(/^Instagram: https?:\/\/[^/]*\/([^/]*)\/? *$/m);
-    if (!username)
+    var username = entry.description.match(/^ *Instagram: https?:\/\/[^/]*\/([^/]*)\/? *$/m);
+    if (!username) {
       continue;
+    }
 
     username = username[1];
 
