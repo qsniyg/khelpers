@@ -108,8 +108,10 @@ function normalize_alt(alt) {
 }
 
 function get_user_roman(text, obj) {
-  if (obj && (text in obj))
+  if (obj && (text in obj)) {
+    obj.user_roman = true;
     return obj[text];
+  }
 
   if (feeds_toml.roman && (text in feeds_toml.roman)) {
     return feeds_toml.roman[text];
@@ -162,8 +164,9 @@ function in_ignorefolders(text) {
 function parse_hangul(text, force, obj) {
   if (!force) {
     var roman = get_user_roman(text, obj);
-    if (roman)
+    if (roman) {
       return roman;
+    }
   }
 
   var parsed = kroman.parse(text);
@@ -313,8 +316,9 @@ function get_last_firstname(text) {
 
 function parse_name(text, obj) {
   var roman = get_user_roman(text, obj);
-  if (roman)
+  if (roman) {
     return roman;
+  }
 
   if (!is_hangul(text.charCodeAt(0)))
     return parse_hangul(text, false, obj);
@@ -451,6 +455,7 @@ function get_name(text, member) {
       var newalt = feeds_toml[key];
       for (var akey in newalt) {
         alt[akey] = newalt[akey];
+        ret.has_alt = true;
         if (akey === "bot_whitelist")
           account.bot_whitelist = newalt[akey];
       }
@@ -519,6 +524,10 @@ function get_name(text, member) {
 
   if ("tags" in alt) {
     ret.tags = alt.tags;
+  }
+
+  if ("user_roman" in alt) {
+    ret.user_roman = alt.user_roman;
   }
 
   if (text[0] === "@") {
@@ -725,6 +734,10 @@ function parse_member(obj, options) {
       member.hide_group = name.hide_group;
     if (name.bot_whitelist !== undefined)
       member.bot_whitelist = name.bot_whitelist;
+    if (name.user_roman !== undefined)
+      member.user_roman = name.user_roman;
+    if (name.has_alt !== undefined)
+      member.has_alt = name.has_alt;
     if (name.tags !== undefined && name.tags.length > 0) {
       member.user_tags = name.tags;
     }
@@ -1073,10 +1086,20 @@ function merge_members(member1, member2) {
   //var newmember = JSON.parse(JSON.stringify(member1));
   var newmember = member1;
 
+  //var member2_priority = member2.has_user_nick;
+  /*if (member1.member_name_kr === "젤로") {
+    console.log(member1);
+  }
+  if (member2.member_name_kr === "젤로") {
+    console.log(member2);
+    }*/
+
+  var member2_priority = !!member2.has_alt;
+
   var i, j;
   if (member2.nicks) {
     for (j = 0; j < member2.nicks.length; j++) {
-      if (member2.has_user_nick)
+      if (member2_priority)
         uunshift(newmember.nicks, member2.nicks[j]);
       else
         upush(newmember.nicks, member2.nicks[j]);
@@ -1085,14 +1108,14 @@ function merge_members(member1, member2) {
     }
   }
 
-  if (member2.has_user_nick) {
+  if (member2_priority) {
     newmember.nicks_roman_first = member2.nicks_roman_first;
     newmember.nicks_hangul_first = member2.nicks_hangul_first;
     newmember.member_name_kr = member2.member_name_kr;
     newmember.member_name = member2.member_name;
     newmember.title = member2.title;
     newmember.title_kr = member2.title_kr;
-    newmember.has_user_nick = member2.has_user_nick;
+    newmember.has_user_nick = member2_priority;
   }
 
   if (member2.names) {
