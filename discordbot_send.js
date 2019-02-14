@@ -45,6 +45,9 @@ function interpolate(value_low, value_high, input_low, input_high, input) {
 }
 
 function get_properties(account) {
+  if (!account.obj)
+    return null;
+
   var desc = account.obj.description;
   if (!desc)
     return null;
@@ -79,7 +82,7 @@ function can_share(member, account) {
     return false;
 
   //if (member.bot_whitelist === true) {
-  if (account.bot_whitelist === true) {
+  if (account.bot_whitelist === true || !account.obj) {
     return true;
   }
 
@@ -94,6 +97,9 @@ function can_share(member, account) {
       var delay = interpolate(time_low, time_high, followers_low, followers_high, followers);
       if (isNaN(delay))
         return false;
+
+      if (!account.obj)
+        return true;
 
       var added_at = account.obj.added_at;
       //console.log(added_at);
@@ -163,6 +169,10 @@ function main(members, options) {
       result.broadcast_guid = options.guid;
     }
 
+    if (options.watch_link) {
+      result.watch_link = options.watch_link;
+    }
+
     if (options.time) {
       result.date = options.time;
     }
@@ -221,18 +231,36 @@ function process_lives(parsed) {
   var lives = [];
   for (var i = 0; i < parsed.entries.length; i++) {
     var entry = parsed.entries[i];
-    if (entry.caption !== "[LIVE]")
+    if (!entry.caption ||
+        entry.caption !== "[LIVE]" &&
+        !entry.caption.startsWith("[LIVE] "))
       continue;
 
+    var site;
+    var watch_link;
     var guid = entry.url.match(/^https?:\/\/guid\.instagram\.com\/([0-9]+_[0-9]+)$/);
-    if (!guid)
+    if (guid) {
+      site = "instagram";
+    } else if (guid = entry.url.match(/^https?:\/\/(?:www\.)?periscope\.tv\/[^/]*\/+([^/]*)$/)) {
+      site = "periscope";
+      watch_link = entry.url;
+    } else if (guid = entry.url.match(/^https?:\/\/(?:www\.)?youtu\.be\/([^/]*)$/)) {
+      site = "youtube";
+      watch_link = entry.url;
+    } else if (guid = entry.url.match(/^https?:\/\/play\.afreecatv\.com\/([^/]*\/[0-9]+)$/)) {
+      site = "afreecatv";
+      watch_link = entry.url;
+    } else {
       continue;
+    }
+
     guid = guid[1];
 
     lives.push({
       type: "live",
       guid,
-      site: "instagram",
+      site,
+      watch_link,
       username: entry.author,
       time: entry.date * 1000
     });
@@ -415,7 +443,10 @@ function start() {
     return;
   }
 
-  if (parsed.url === "https://reelstray.instagram.com/") {
+  if (parsed.url === "https://reelstray.instagram.com/" ||
+      parsed.url === "https://www.youtube.com/live" ||
+      parsed.url === "https://www.periscope.tv/?following=true" ||
+      parsed.url === "http://www.afreecatv.com/?hash=favorite") {
     return process_lives(parsed);
   }
 

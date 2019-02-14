@@ -113,7 +113,7 @@ var msgs = {
       "This message (and the commands) vary on whether you're contacting the bot via DM, or if you're in a server you own.",
       "Commands sent in a DM affect personal notifications, while commands sent in a server will affect that server."
     ].join("\n"),
-    kr: "DM으로 이 봇을 사용하시면 전송하신 명령은 개인적인 알림 변경하는데 서버로 사용하시면 서버의 알림 설정 번경합니다"
+    kr: "DM으로 이 봇을 사용하시면 전송하신 명령은 개인적인 알림을 변경하는데 서버로 사용하시면 서버의 알림 설정을 번경합니다"
   },
   list_command: {
     en: "list",
@@ -339,6 +339,14 @@ var msgs = {
   periscope: {
     en: "Periscope",
     kr: "페리스코프"
+  },
+  youtube: {
+    en: "Youtube",
+    kr: "유튜브"
+  },
+  afreecatv: {
+    en: "AfreecaTV",
+    kr: "아프리카TV"
   },
   noupload: {
     en: "will likely not be uploaded",
@@ -1167,8 +1175,13 @@ function sanitize_id(id) {
   if (typeof id !== "string")
     throw "id is not a string";
 
+  // in case someone wrote a channel name instead
   if (id.match(/^<!?[#@]([0-9]+)>$/))
     return id.replace(/^<!?[#@]([0-9]+)>$/, "$1");
+
+  // underscores can be accidentally pressed and harder to see
+  if (id.match(/^_*([0-9]+)_*$/))
+    return id.replace(/^_*([0-9]+)_*$/, "$1");
 
   if (!id.match(/^\s*[0-9]+\s*$/))
     throw "id is not a number";
@@ -1913,13 +1926,19 @@ async function send_message(body) {
   case "periscope":
     sitename = "periscope";
     break;
+  case "youtube":
+    sitename = "youtube";
+    break;
+  case "afreecatv":
+    sitename = "afreecatv";
+    break;
   }
 
   if (body.type === "live" ||
       body.type === "replay") {
     var noupload_msg_en = "";
     var noupload_msg_kr = "";
-    if (true) {
+    if (true && body.site === "instagram") {
       if (body.noupload || body.group_noupload) {
         //noupload_msg = " *(will likely not be uploaded)*";
         noupload_msg_en = " *(" + _("en", "noupload") + ")*";

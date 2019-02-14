@@ -435,18 +435,24 @@ function main() {
 
       var member_url;
       var member_usernames = [];
+      var member_accounts = [];
 
       /*if (member.instagram_obj)
         member_url = member.instagram_obj.url;
       else if (member.obj)
       member_url = member.obj.url;*/
       member.accounts.forEach((account) => {
-        member_usernames.push(account.username.toLowerCase());
+        if (account.username) {
+          member_usernames.push(account.username.toLowerCase());
+          member_accounts.push(account);
+        }
       });
 
       //if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
-      if (member_usernames.indexOf(username_str.toLowerCase()) >= 0) {
+      var member_username_index = member_usernames.indexOf(username_str.toLowerCase());
+      if (member_username_index >= 0) {
         console.log(member);
+        var account = member_accounts[member_username_index];
 
         var info = {
           member: member,
@@ -587,10 +593,11 @@ function main() {
         member.tags.push(username_str);
 
         var privacy = "private";
-        if (member.upload_privacy &&
-            (member.upload_privacy === "unlisted" ||
-             member.upload_privacy === "public")) {
-          privacy = member.upload_privacy;
+        if (account.upload_privacy &&
+            (account.upload_privacy === "unlisted" ||
+             account.upload_privacy === "public")) {
+          privacy = account.upload_privacy;
+          console.log("Privacy: "+ privacy);
         }
 
         if (!yt_playlist && member.playlist && member.playlist.length >= 10) {

@@ -449,6 +449,10 @@ function get_name(text, member) {
   parse_alt(alt, member, "weibo");*/
 
   member.accounts.forEach((account) => {
+    if (!account.username) {
+      //console.log(account);
+      return;
+    }
     var username = account.username.toLowerCase();
     var key = account.site + "/@" + username;
     if (key in feeds_toml) {
@@ -456,8 +460,9 @@ function get_name(text, member) {
       for (var akey in newalt) {
         alt[akey] = newalt[akey];
         ret.has_alt = true;
-        if (akey === "bot_whitelist")
-          account.bot_whitelist = newalt[akey];
+        if (akey === "bot_whitelist" ||
+            akey === "upload_privacy")
+          account[akey] = newalt[akey];
       }
     }
   });
@@ -528,6 +533,20 @@ function get_name(text, member) {
 
   if ("user_roman" in alt) {
     ret.user_roman = alt.user_roman;
+  }
+
+  if ("alt_accounts" in alt && alt.alt_accounts instanceof Array) {
+    ret.alt_accounts = [];
+    alt.alt_accounts.forEach(account => {
+      var site = account.replace(/(.*)\/(.*)$/, "$1");
+      var username = account.replace(/(.*)\/(.*)$/, "$2");
+      var account = {
+        username,
+        site
+      };
+      account.link = get_link_for_account(account);
+      ret.alt_accounts.push(account);
+    });
   }
 
   if (text[0] === "@") {
@@ -675,10 +694,66 @@ function uunshift(array, item) {
   }
 }
 
-function get_username_from_rssit_url(url) {
-  return url.replace(/.*\/(?:instagram|twitter|weibo)\/u\/([^/?&]*).*$/, "$1");
+function get_description_properties(desc) {
+  if (!desc)
+    return null;
+
+  var desc_info = desc.replace(/^[\s\S]*\n---\n/, "");
+  if (desc_info === desc) {
+    desc_info = desc.replace(/^---\n/, "");
+  }
+
+  if (desc_info !== desc) {
+    var desc_properties = {};
+    while (true) {
+      var current_desc = desc_info.replace(/^(.*)[\s\S]*?$/, "$1");
+      if (!current_desc)
+        break;
+
+      var property = current_desc.replace(/^(.*?): *(.*)[\s\S]*?$/, "$1");
+      var value = current_desc.replace(/^(.*?): *(.*)[\s\S]*?$/, "$2");
+
+      desc_properties[property.toLowerCase()] = value;
+
+      var new_desc_info = desc_info.replace(/^.*\n([\s\S]*)$/, "$1");
+      if (!new_desc_info || new_desc_info === desc_info)
+        break;
+      desc_info = new_desc_info;
+    }
+
+    return desc_properties;
+  }
+
+  return null;
 }
-module.exports.get_username_from_rssit_url = get_username_from_rssit_url;
+module.exports.get_description_properties = get_description_properties;
+
+function get_username_from_rssit_obj(obj) {
+  var url = obj.url.replace(/.*\/(?:instagram|twitter|weibo)\/u\/([^/?&]*).*$/, "$1");
+  if (url !== obj.url)
+    return url;
+
+  var props = get_description_properties(obj.description);
+  if (props && props.username)
+    return props.username;
+}
+module.exports.get_username_from_rssit_obj = get_username_from_rssit_obj;
+
+function get_link_for_account(account) {
+  if (account.site === "instagram")
+    return "https://www.instagram.com/" + account.username;
+  if (account.site === "periscope")
+    return "https://www.periscope.tv/" + account.username;
+  if (account.site === "weibo")
+    return "https://www.weibo.com/u/" + account.username;
+  if (account.site === "twitter")
+    return "https://www.twitter.com/" + account.username;
+  if (account.site === "youtube")
+    return "https://www.youtube.com/channel/" + account.username;
+  if (account.site === "afreecatv")
+    return "https://bj.afreecatv.com/" + account.username;
+  return null;
+}
 
 function parse_member(obj, options) {
   var member = {
@@ -694,7 +769,7 @@ function parse_member(obj, options) {
   else
     member.comment = "";
 
-  var username = get_username_from_rssit_url(obj.url);
+  var username = get_username_from_rssit_obj(obj);
   if (username && username != obj.url) {
     /*if (options && options.site) {
       member[options.site + "_username"] = username;
@@ -740,6 +815,11 @@ function parse_member(obj, options) {
       member.has_alt = name.has_alt;
     if (name.tags !== undefined && name.tags.length > 0) {
       member.user_tags = name.tags;
+    }
+    if (name.alt_accounts !== undefined && name.alt_accounts.length > 0) {
+      name.alt_accounts.forEach(account => {
+        member.accounts.push(account);
+      });
     }
   }
 
@@ -1115,7 +1195,7 @@ function merge_members(member1, member2) {
     newmember.member_name = member2.member_name;
     newmember.title = member2.title;
     newmember.title_kr = member2.title_kr;
-    newmember.has_user_nick = member2_priority;
+    newmember.has_user_nick = member2.has_user_nick;
   }
 
   if (member2.names) {
@@ -1329,6 +1409,7 @@ function parse_feeds_inner() {
         do_sns("instagram");
         do_sns("twitter");
         do_sns("weibo");
+        do_sns("periscope");
 
         resolve(module.exports.members);
       })
