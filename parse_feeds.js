@@ -677,6 +677,7 @@ function upush(array, item) {
     array.push(item);
   }
 }
+module.exports.upush = upush;
 
 function uunshift(array, item) {
   if (item instanceof Array) {
@@ -827,12 +828,15 @@ function parse_member(obj, options) {
   if (options) {
     if (options.group && !in_nogroups(options.group)) {
       member.group = options.group;
+      member.group_yt = member.group;
       member.group_roman = parse_hangul_first(member.group);
+      member.group_roman_yt = member.group_roman;
       member.group_romans = parse_hangul(member.group);
 
       if (member.group_roman.indexOf("NOUPLOAD") >= 0) {
         member.group_roman = strip(member.group_roman.replace(/ *NOUPLOAD$/, ""));
         member.group_noupload = true;
+        member.group_yt += " NOUPLOAD";
       }
 
       if (options.groupcomment) {
@@ -988,7 +992,7 @@ function parse_member(obj, options) {
   var member_name;
   var korean_member_name;
 
-  if (member.group && !member.hide_group) {
+  if (member.group && !member.family && !member.hide_group) {
     if (member.nicks_roman_first && !member.use_fullname)
       member_name = member.nicks_roman_first;
     else if (member.names_roman_first)
@@ -1034,14 +1038,34 @@ function parse_member(obj, options) {
   member.member_name_kr = korean_member_name;
   member.member_name = member_name;
 
+  if (member.eng_kr_name)
+    member.member_fullname = member.eng_kr_name;
+  else if (member.names && member.names[0] && member.names[0].hangul !== member_name)
+    member.member_fullname = member.names[0].hangul;
+  else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== member_name)
+    member.member_fullname = member.nicks[0].hangul;
+
+  if (member.names && member.names[0] && member.names[0].hangul !== korean_member_name)
+    member.member_fullname_kr = member.names[0].hangul;
+  else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== korean_member_name &&
+           member.has_user_nick)
+    member.member_fullname_kr = member.nicks[0].hangul;
+
+  var noupload_text = "";
+  if (member.noupload)
+    noupload_text = " NOUPLOAD";
+
   var grouptitle = "";
+  var grouptitle_yt = "";
   var title = "";
-  if (member.group && !member.hide_group) {
+  var title_yt = "";
+  if (member.group && !member.family && !member.hide_group) {
     if (member.ex && !member.haitus) {
       grouptitle = "Ex-";
     }
 
-    grouptitle += member.group_roman + " ";
+    grouptitle_yt = grouptitle + member.group_roman_yt + " ";
+    grouptitle = grouptitle + member.group_roman + " ";
 
     if (member.family) {
       if (member.nicks_roman_first &&
@@ -1064,6 +1088,7 @@ function parse_member(obj, options) {
       title += " (" + grouptitle + comment_name + comment.replace(/.*'s/, "'s") + ")";
     } else {
       title += grouptitle;
+      title_yt += grouptitle_yt;
 
       var title_name = "";
       if (member.nicks_roman_first && !member.use_fullname)
@@ -1073,8 +1098,10 @@ function parse_member(obj, options) {
       else
         title_name += member.alt;
 
-      if (strip(grouptitle) !== strip(title_name))
+      if (strip(grouptitle) !== strip(title_name)) {
         title += title_name;
+        title_yt += title_name;
+      }
     }
   } else {
     if (member.nicks_roman_first &&
@@ -1084,12 +1111,18 @@ function parse_member(obj, options) {
       title += member.names_roman_first;
     else
       title += member.alt;
+
+    title_yt = title;
   }
 
+  // TODO: add tags for family members
+
   member.title = strip(title);
+  member.title_yt = strip(title_yt) + noupload_text;
 
   var title_kr = "";
-  if (member.group && !member.hide_group) {
+  var title_kr_yt = "";
+  if (member.group && !member.family && !member.hide_group) {
     var kr_ex = "";
     var kr_ex1 = "";
     if (member.ex && !member.haitus) {
@@ -1098,6 +1131,7 @@ function parse_member(obj, options) {
     }
 
     var korean_group = member.group;
+    var korean_group_yt = member.group_yt;
 
     if (member.nicks && member.nicks[0])
       title_kr = member.nicks[0].hangul;
@@ -1106,11 +1140,15 @@ function parse_member(obj, options) {
     else
       title_kr = member.alt;
 
-    if (title_kr !== korean_group)
+    if (title_kr !== korean_group) {
       //korean_name += korean_group + " " + kr_ex + title_kr;
-      title_kr = kr_ex1 + korean_group + " " + title_kr;
-    else
+      var orig_title_kr = title_kr;
+      title_kr = kr_ex1 + korean_group + " " + orig_title_kr;
+      title_kr_yt = kr_ex1 + korean_group_yt + " " + orig_title_kr;
+    } else {
       title_kr = korean_group;
+      title_kr_yt = korean_group_yt;
+    }
   } else {
     if (member.nicks && member.nicks[0] &&
         (member.has_user_nick || !(member.names_roman_first))) {
@@ -1120,9 +1158,12 @@ function parse_member(obj, options) {
     } else {
       title_kr += member.alt;
     }
+
+    title_kr_yt = title_kr;
   }
 
-  member.title_kr = title_kr;
+  member.title_kr = strip(title_kr);
+  member.title_kr_yt = strip(title_kr_yt) + noupload_text;
 
   return member;
 }
@@ -1445,3 +1486,103 @@ function videoid_from_youtube_url(url) {
   return url.match(/:\/\/[^/]*\/[^/]*?[?&](?:v|video_id)=([^&]*)/)[1];
 }
 module.exports.videoid_from_youtube_url = videoid_from_youtube_url;
+
+function template_parse(template, variablecb) {
+  function parse_block(start, startbracket, stack) {
+    if (stack > 100) {
+      console.log("[ERROR] Template parsing stack reached >100");
+      return "";
+    }
+
+    var type = null;
+    var in_escape = false;
+    var ret = "";
+    var varname = "";
+    var use_varname = true;
+    var i = start;
+    for (i = start; i < template.length; i++) {
+      var c = template[i];
+
+      if (c === "{" && !in_escape) {
+         if (startbracket) {
+           type = "variable";
+        } else {
+          var newtext = parse_block(i+1, true, stack+1);
+          i = newtext[1];
+          if (use_varname && type !== null)
+            varname += newtext[0];
+          else
+            ret += newtext[0];
+
+        }
+
+        startbracket = false;
+        continue;
+      }
+
+      if (startbracket) {
+        if (c === "%") {
+          type = "with";
+        }
+
+        startbracket = false;
+        continue;
+      }
+
+      if (c === "}" && !in_escape && type !== null) {
+        varname = strip(varname);
+        if (type === "variable") {
+          ret += variablecb(varname);
+        } else if (type === "with") {
+          if (variablecb(varname)) {
+            return [ret, i];
+          } else {
+            return ["", i];
+          }
+        }
+        return [ret, i];
+      }
+
+      if (c === "\\" && !in_escape) {
+        in_escape = true;
+        continue;
+      } else if (in_escape) {
+        in_escape = false;
+      }
+
+      if (type === null) {
+        ret += c;
+      } else {
+        if (c === " " && use_varname) {
+          use_varname = false;
+          continue;
+        }
+
+        if (use_varname) {
+          varname += c;
+        } else {
+          ret += c;
+        }
+      }
+    }
+
+    return [ret, i-1];
+  }
+  return parse_block(0, false, 0)[0];
+}
+module.exports.template_parse = template_parse;
+
+function get_settings() {
+  var settings = JSON.parse(JSON.stringify(parse_feeds.feeds_toml.general));
+  for (var i = 0; i < arguments.length; i++) {
+    if (arguments[i] in parse_feeds.feeds_toml) {
+      var top = parse_feeds.feeds_toml[arguments[i]];
+      for (var setting in top) {
+        settings[setting] = JSON.parse(JSON.stringify(top[setting]));
+      }
+    }
+  }
+
+  return settings;
+}
+module.exports.get_settings = get_settings;

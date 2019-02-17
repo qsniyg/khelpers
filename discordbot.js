@@ -370,6 +370,13 @@ var msgs = {
   }
 };
 
+var short_sites = {
+  "instagram": "IG",
+  "periscope": "PSCOPE",
+  "youtube": "YT",
+  "afreecatv": "ATV"
+};
+
 function _(lang, id) {
   if (lang === "both") {
     var args = Array.from(arguments).slice(1);
@@ -653,10 +660,22 @@ function find_star(properties) {
           orquery.push({"name": properties.name});
         }
 
-        if ("search" in properties) {
-          var search = strip_search(properties.search);
+        if (!("search" in properties)) {
+          properties.search = create_search(properties);
+        }
 
-          orquery.push({"search": search});
+        if ("search" in properties) {
+          if (typeof properties.search === "string") {
+
+            var search = strip_search(properties.search);
+            orquery.push({"search": search});
+          } else if (properties.search instanceof Array) {
+            var search = properties.search;
+
+            for (var i = 0; i < search.length; i++) {
+              orquery.push({"search": strip_search(search[i])});
+            }
+          }
         }
 
         var query = {};
@@ -915,7 +934,7 @@ function update_account(account, properties) {
     if (changed) {
       db_accounts.update(account._id, account).then(
         account => {
-          resolve(account);
+          resolve(account.result);
         },
         err => {
           reject(err);
@@ -970,7 +989,7 @@ function update_star(star, properties) {
 
     if (star._id) {
       db_stars.update(star._id, star).then(
-        star => {
+        result => {
           resolve(star);
         },
         err => {
@@ -979,7 +998,7 @@ function update_star(star, properties) {
       );
     } else {
       db_stars.insert(star).then(
-        star => {
+        result => {
           resolve(star);
         },
         err => {
@@ -1023,7 +1042,7 @@ async function add_account(properties) {
     }
 
     var newaccount = await db_accounts.insert(account);
-    return newaccount;
+    return account;
   } else {
     var id = await create_star_id();
 
@@ -1070,7 +1089,7 @@ async function create_rule(options) {
 
   console.log(options);
   var rule = await db_rules.insert(options);
-  return [rule, true];
+  return [options, true];
 }
 
 function remove_rule(rule_id, source) {
@@ -1875,7 +1894,7 @@ client.on('raw', async function(event) {
 });
 
 var clear_activity_timeout = null;
-var clear_activity_time = 30*1000;
+var clear_activity_time = 60*1000;
 var current_watching = null;
 async function clear_status() {
   try {
@@ -1908,7 +1927,11 @@ async function set_status(body) {
   }
 
   try {
-    await client.user.setActivity(body.name, { type: 'WATCHING' });
+    var status = body.name;
+    if (body.site && body.site in short_sites)
+      status += " | " + short_sites[body.site];
+
+    await client.user.setActivity(status, { type: 'WATCHING' });
 
     current_watching = body;
     clear_activity_timeout = setTimeout(clear_status, clear_activity_time);

@@ -11,13 +11,19 @@ function is_member_account(member, id, site) {
     return false;
 
   for (var i = 0; i < member.accounts.length; i++) {
-    if (site !== "periscope" || member.accounts[i].site !== "twitter") {
-      if (member.accounts[i].site !== site)
-        continue;
-    }
+    if (member.accounts[i].site !== site)
+      continue;
 
-    if (member.accounts[i].username.toLowerCase() === id.toLowerCase())
-      return member.accounts[i];
+    if (site === "instagram" ||
+        site === "twitter" ||
+        site === "periscope" ||
+        site === "afreecatv") {
+      if (member.accounts[i].username.toLowerCase() === id.toLowerCase())
+        return member.accounts[i];
+    } else {
+      if (member.accounts[i].username === id)
+        return member.accounts[i];
+    }
   }
 
   return false;
@@ -65,7 +71,7 @@ function get_properties(account) {
 
       desc_properties[property.toLowerCase()] = value;
 
-      var new_desc_info = desc_info.replace(/^.*\n(.*)$/, "$1");
+      var new_desc_info = desc_info.replace(/^.*\n([\s\S]*)$/, "$1");
       if (!new_desc_info || new_desc_info === desc_info)
         break;
       desc_info = new_desc_info;
@@ -80,6 +86,9 @@ function get_properties(account) {
 function can_share(member, account) {
   if (!member || member.family)
     return false;
+
+  if (account.site !== "instagram")
+    return true;
 
   //if (member.bot_whitelist === true) {
   if (account.bot_whitelist === true || !account.obj) {
@@ -445,6 +454,7 @@ function start() {
 
   if (parsed.url === "https://reelstray.instagram.com/" ||
       parsed.url === "https://www.youtube.com/live" ||
+      parsed.url === "https://www.youtube.com/feed/subscriptions" ||
       parsed.url === "https://www.periscope.tv/?following=true" ||
       parsed.url === "http://www.afreecatv.com/?hash=favorite") {
     return process_lives(parsed);

@@ -140,6 +140,14 @@ function add_to_playlist(youtube, playlist, video, cb) {
   }, cb);
 }
 
+function notify_fatal(message) {
+  notifier.notify({
+    title: "[YTUL] Fatal",
+    message
+  });
+  process.exit();
+}
+
 function upload_video_yt(options) {
   console.dir(options);
 
@@ -330,6 +338,29 @@ function upload_video(options) {
   }
 }
 
+function base_variable(name, top) {
+  for (var v in top) {
+    if (name === v)
+      return top[v];
+  }
+
+  if (name.indexOf(".") < 0)
+    return null;
+
+  try {
+    var split = name.split(".");
+
+    if (split[0] in top) {
+      return top[split[0]][split[1]];
+    } else {
+      return parse_feeds.feeds_toml[split[0]][split[1]];
+    }
+  } catch (e) {
+    console.log(e);
+    notify_fatal("Template Variable (" + name + "): " + e);
+  }
+}
+
 function do_timestamp(ts) {
   return parse_feeds.pad(ts.year().toString().slice(2), 2) +
     parse_feeds.pad((ts.month() + 1).toString(), 2) +
@@ -406,7 +437,7 @@ function main() {
     return;
   }
 
-  var matchobj = filename.match(/\/instagram\/([^/]*)\/\(([^)]*)\)/);
+  var matchobj = filename.match(/\/(instagram|periscope)\/([^/]*)\/\(([^)]*)\)/);
   if (!matchobj) {
     console.log("Not matched");
     return;
@@ -414,8 +445,9 @@ function main() {
 
   parse_feeds = require('./parse_feeds');
 
-  var username_str = matchobj[1].toLowerCase();
-  var date_str = matchobj[2];
+  var site_str = matchobj[1];
+  var username_str = matchobj[2].toLowerCase();
+  var date_str = matchobj[3];
   var date = new Date(date_str);
 
   var timestamp_year = pad(date.getFullYear()-2000, 2);
@@ -423,11 +455,38 @@ function main() {
   var timestamp_day = pad(date.getDate(), 2);
   var timestamp = timestamp_year + timestamp_month + timestamp_day;
   timestamp = create_timestamp(date);
-  var endtitle = " [" + timestamp + "]";
+  var endtitle, endtitle_kr,
+      firsttitle, firsttitle_kr,
+      description, description_kr;
 
-  var description = desc_prepend + "Instagram: https://www.instagram.com/" + username_str + "/";
+  //var description = desc_prepend + "Instagram: https://www.instagram.com/" + username_str + "/";
 
   parse_feeds.parse_feeds().then((members) => {
+    function resolve_time(name) {
+      return base_variable(name, {
+        time: timestamp
+      });
+    }
+
+    function resolve_username(name) {
+      return base_variable(name, {
+        username: username_str,
+        site: parse_feeds.feeds_toml[site_str]
+      });
+    }
+
+    try {
+      firsttitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_title_template, resolve_username);
+      firsttitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_title_template_kr, resolve_username);
+      description = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template, resolve_username);
+      description_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template_kr, resolve_username);
+      endtitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.timestamp_template, resolve_time);
+      endtitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.timestamp_template_kr, resolve_time);
+    } catch (e) {
+      console.log(e);
+      notify_fatal("Template error: " + e);
+    }
+
     for (var i = 0; i < members.length; i++) {
       var member = members[i];
       if (!member)
@@ -442,7 +501,7 @@ function main() {
       else if (member.obj)
       member_url = member.obj.url;*/
       member.accounts.forEach((account) => {
-        if (account.username) {
+        if (account.username && account.site == site_str) {
           member_usernames.push(account.username.toLowerCase());
           member_accounts.push(account);
         }
@@ -462,6 +521,31 @@ function main() {
 
           member_url: "https://www.instagram.com/" + username_str + "/"
         };
+
+        function resolve_variable(name) {
+          return base_variable(name, {
+            m: member,
+            a: account,
+            site: parse_feeds.feeds_toml[account.site]
+          });
+        }
+
+        var new_firsttitle, new_firsttitle_kr;
+        var new_description, new_description_kr;
+        try {
+          new_firsttitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template, resolve_variable);
+          new_firsttitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template_kr, resolve_variable);
+          console.log(new_firsttitle);
+          console.log(new_firsttitle_kr);
+
+          new_description = desc_prepend + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template, resolve_variable);
+          new_description_kr = desc_prepend_kr + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template_kr, resolve_variable);
+          console.log(new_description);
+          console.log(new_description_kr);
+        } catch (e) {
+          console.log(e);
+          notify_fatal("Template error: " + e);
+        }
 
         var description_template = parse_feeds.feeds_toml.general.description_template;
         if (!description_template) {
@@ -512,12 +596,17 @@ function main() {
           name = member_name;
         }
 
+        var eng_kr_name;
+
         if (member.eng_kr_name)
-          name += " (" + member.eng_kr_name + ")";
+          eng_kr_name = member.eng_kr_name;
         else if (member.names && member.names[0] && member.names[0].hangul !== member_name)
-          name += " (" + member.names[0].hangul + ")";
+          eng_kr_name = member.names[0].hangul;
         else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== member_name)
-          name += " (" + member.nicks[0].hangul + ")";
+          eng_kr_name = member.nicks[0].hangul;
+
+        if (eng_kr_name && eng_kr_name !== member_name)
+          name += " (" + eng_kr_name + ")";
 
 
         var korean_name = "";
@@ -568,11 +657,16 @@ function main() {
           korean_name = korean_member_name;
         }
 
+        var kr_kr_name;
+
         if (member.names && member.names[0] && member.names[0].hangul !== korean_member_name)
-          korean_name += " (" + member.names[0].hangul + ")";
+          kr_kr_name = member.names[0].hangul;
         else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== korean_member_name &&
                  member.has_user_nick)
-          korean_name += " (" + member.nicks[0].hangul + ")";
+          kr_kr_name = member.nicks[0].hangul;
+
+        if (kr_kr_name && kr_kr_name !== korean_member_name)
+          korean_name += " (" + kr_kr_name + ")";
 
         var firsttitle = name + " Instagram Live";
         var firsttitle_korean = korean_name + " 인스타라이브";
@@ -590,6 +684,11 @@ function main() {
         console.log(description_en);
         console.log(description_kr);
 
+        if ("tags" in parse_feeds.feeds_toml[site_str]) {
+          parse_feeds.feeds_toml[site_str].tags.forEach((tag) => {
+            parse_feeds.upush(member.tags, tag);
+          });
+        }
         member.tags.push(username_str);
 
         var privacy = "private";
@@ -605,12 +704,13 @@ function main() {
         }
 
         do_upload({
-          firsttitle: firsttitle,
-          firsttitle_korean: firsttitle_korean,
+          firsttitle: new_firsttitle,
+          firsttitle_korean: new_firsttitle_kr,
           endtitle: endtitle,
+          endtitle_kr: endtitle_kr,
           timestamp: timestamp,
-          description: description_en,
-          description_kr: description_kr,
+          description: new_description,
+          description_kr: new_description_kr,
           tags: member.tags,
           file: real_filename,
           privacy: privacy,
@@ -622,12 +722,13 @@ function main() {
     }
 
     do_upload({
-      firsttitle: "@" + username_str + " Instagram Live",
-      firsttitle_korean: "@" + username_str + " 인스타라이브",
+      firsttitle,
+      firsttitle_korean: firsttitle_kr,
       endtitle,
+      endtitle_kr,
       timestamp,
       description: description,
-      description_kr: description,
+      description_kr: description_kr,
       file: real_filename,
       tags: [username_str],
       youtube_id: youtubeid,
@@ -644,7 +745,7 @@ function do_upload(options) {
   }
 
   options.title = options.firsttitle + options.endtitle;
-  options.title_korean = options.timestamp + " " + options.firsttitle_korean;
+  options.title_korean = options.endtitle_kr + " " + options.firsttitle_korean;
 
   get_videos().then((data) => {
     var count = 0;
@@ -658,7 +759,7 @@ function do_upload(options) {
     if (count > 0) {
       count++;
       options.title = options.firsttitle + " " + count + options.endtitle;
-      options.title_korean = options.timestamp + " " + options.firsttitle_korean + " " + count;
+      options.title_korean = options.endtitle_kr + " " + options.firsttitle_korean + " " + count;
       console.log(options.title);
     }
 
