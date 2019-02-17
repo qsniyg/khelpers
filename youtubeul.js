@@ -215,9 +215,9 @@ function upload_video_yt(options) {
         if (reupload) {
           var new_object = {
             title: result.snippet.title,
-            title_korean: result.localizations["ko"].title,
+            title_korean: result.localizations.ko.title,
             description: result.snippet.description,
-            description_kr: result.localizations["ko"].description,
+            description_kr: result.localizations.ko.description,
             tags: result.snippet.tags,
             file: options.filename,
             privacy: "private",
@@ -240,12 +240,12 @@ function upload_video_yt(options) {
         if (number !== result.snippet.title) {
           base_request.resource.snippet.title = base_request.resource.snippet.title
             .replace(/(?: [0-9]+)? (\[[0-9]+\] *)$/, " " + number + " $1");
-          base_request.resource.localizations["ko"].title = base_request.resource.localizations["ko"].title
+          base_request.resource.localizations.ko.title = base_request.resource.localizations.ko.title
             .replace(/(?: [0-9]+)?$/, " " + number);
         } else {
           base_request.resource.snippet.title = base_request.resource.snippet.title
             .replace(/ [0-9]+ (\[[0-9]+\] *)$/, " $1");
-          base_request.resource.localizations["ko"].title = base_request.resource.localizations["ko"].title
+          base_request.resource.localizations.ko.title = base_request.resource.localizations.ko.title
             .replace(/ [0-9]+$/, "");
         }
 
@@ -312,8 +312,8 @@ function upload_video_yt(options) {
       var id = setInterval(function () {
         var uploadedBytes = req.req.connection._bytesDispatched;
         var uploadedMBytes = uploadedBytes / 1000000;
-        var progress = uploadedBytes > fileSize
-            ? 100 : (uploadedBytes / fileSize) * 100;
+        var progress = uploadedBytes > fileSize ?
+            100 : (uploadedBytes / fileSize) * 100;
         /*process.stdout.clearLine();
           process.stdout.cursorTo(0);*/
         /*process.stdout.write*/console.log(uploadedMBytes.toFixed(2) + ' MBs uploaded. ' +
@@ -369,12 +369,6 @@ function do_timestamp(ts) {
 
 function create_timestamp(date) {
   return do_timestamp(moment(date));
-
-  var timestamp_year = pad(date.getFullYear()-2000, 2);
-  var timestamp_month = pad(date.getMonth() + 1, 2);
-  var timestamp_day = pad(date.getDate(), 2);
-  var timestamp = timestamp_year + timestamp_month + timestamp_day;
-  return timestamp;
 }
 
 var dmupload = false;
@@ -500,7 +494,7 @@ function main() {
         member_url = member.instagram_obj.url;
       else if (member.obj)
       member_url = member.obj.url;*/
-      member.accounts.forEach((account) => {
+      member.accounts.forEach(account => {
         if (account.username && account.site == site_str) {
           member_usernames.push(account.username.toLowerCase());
           member_accounts.push(account);
@@ -546,19 +540,6 @@ function main() {
           console.log(e);
           notify_fatal("Template error: " + e);
         }
-
-        var description_template = parse_feeds.feeds_toml.general.description_template;
-        if (!description_template) {
-          description_template = "{{sitename_en}}: {{member_url}}";
-        }
-
-        var description_template_kr = parse_feeds.feeds_toml.general.description_template_kr;
-        if (!description_template_kr) {
-          description_template = "{{sitename_kr}}: {{member_url}}";
-        }
-
-        var description_en = desc_prepend + mustache.render(description_template, info);
-        var description_kr = desc_prepend_kr + mustache.render(description_template_kr, info);
 
         var name = "";
         var member_name = "";
@@ -668,24 +649,8 @@ function main() {
         if (kr_kr_name && kr_kr_name !== korean_member_name)
           korean_name += " (" + kr_kr_name + ")";
 
-        var firsttitle = name + " Instagram Live";
-        var firsttitle_korean = korean_name + " 인스타라이브";
-
-        if (member.noupload) {
-          firsttitle += " NOUPLOAD";
-          firsttitle_korean += " NOUPLOAD";
-        }
-
-        var title = firsttitle + endtitle;
-        var title_korean = firsttitle_korean + endtitle;
-        console.log(title);
-        console.log(title_korean);
-
-        console.log(description_en);
-        console.log(description_kr);
-
         if ("tags" in parse_feeds.feeds_toml[site_str]) {
-          parse_feeds.feeds_toml[site_str].tags.forEach((tag) => {
+          parse_feeds.feeds_toml[site_str].tags.forEach(tag => {
             parse_feeds.upush(member.tags, tag);
           });
         }
