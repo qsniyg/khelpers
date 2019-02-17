@@ -9,8 +9,6 @@ const notifier = require('node-notifier');
 var DMClient = require('dailymotion-sdk').client;
 var moment = require('moment-timezone');
 var path = require('path');
-var mustache = require('mustache');
-mustache.escape = function(text) {return text;};
 var readlineSync = require('readline-sync');
 
 var tz_offset = 9; // KST
