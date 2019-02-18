@@ -17,7 +17,8 @@ function is_member_account(member, id, site) {
     if (site === "instagram" ||
         site === "twitter" ||
         site === "periscope" ||
-        site === "afreecatv") {
+        site === "afreecatv" ||
+        site === "goldlive") {
       if (member.accounts[i].username.toLowerCase() === id.toLowerCase())
         return member.accounts[i];
     } else {
@@ -259,6 +260,9 @@ function process_lives(parsed) {
     } else if (guid = entry.url.match(/^https?:\/\/play\.afreecatv\.com\/([^/]*\/[0-9]+)$/)) {
       site = "afreecatv";
       watch_link = entry.url;
+    } else if (guid = entry.url.match(/^https?:\/\/player\.goldlive\.co\.kr\/play\/([0-9]+)$/)) {
+      site = "goldlive";
+      watch_link = entry.url;
     } else {
       continue;
     }
@@ -456,7 +460,8 @@ function start() {
       parsed.url === "https://www.youtube.com/live" ||
       parsed.url === "https://www.youtube.com/feed/subscriptions" ||
       parsed.url === "https://www.periscope.tv/?following=true" ||
-      parsed.url === "http://www.afreecatv.com/?hash=favorite") {
+      parsed.url === "http://www.afreecatv.com/?hash=favorite" ||
+      parsed.url === "http://www.goldlive.co.kr/mypage/favorite_bj") {
     return process_lives(parsed);
   }
 

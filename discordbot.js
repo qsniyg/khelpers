@@ -348,6 +348,10 @@ var msgs = {
     en: "AfreecaTV",
     kr: "아프리카TV"
   },
+  goldlive: {
+    en: "Goldlive",
+    kr: "골드라이브"
+  },
   noupload: {
     en: "will likely not be uploaded",
     kr: "다시보기 올리지 않을 것입니다"
@@ -374,7 +378,8 @@ var short_sites = {
   "instagram": "IG",
   "periscope": "PSCOPE",
   "youtube": "YT",
-  "afreecatv": "ATV"
+  "afreecatv": "ATV",
+  "goldlive": "GOLDL"
 };
 
 function _(lang, id) {
@@ -1954,6 +1959,9 @@ async function send_message(body) {
     break;
   case "afreecatv":
     sitename = "afreecatv";
+    break;
+  case "goldlive":
+    sitename = "goldlive";
     break;
   }
 
