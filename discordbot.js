@@ -151,6 +151,10 @@ var msgs = {
     en: "`group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
     kr: "`그룹과멤버이름`에 여러 단어가 포함된 경우에는 단어 앞뒤에 따옴표를 사용하십시오. 공백과 글점 무시됩니다",
   },
+  subscribe_username_ok_help: {
+    en: "You can also subscribe by their username (for example: `%%{subscribe_command} 'taeyeon_ss' true`), however, this is still limited to the accounts available in the bot's database.",
+    kr: "인스타 아이디로 구독해도 되는데 (예를 들어서 `%%{subscribe_command} 'taeyeon_ss' true`), 봇의 DB에 없는 계정을 구독할 수 없습니다."
+  },
   examples: {
     en: "Examples:",
     kr: "예시는"
@@ -160,7 +164,9 @@ var msgs = {
     "",
     "%%{replays_help}",
     "",
-    "%%{subscribe_you_examples}"
+    "%%{subscribe_you_examples}",
+    "",
+    "%%{subscribe_username_ok_help}"
   ].join("\n"),
   subscribe_guild_args: {
     en: "channel_id group_and_member_name with_replays [ping_role_id]",
@@ -197,7 +203,8 @@ var msgs = {
     "%%{group_membername_help}\n",
     "%%{replays_help}\n",
     "%%{ping_role_help}\n",
-    "%%{subscribe_guild_examples}"
+    "%%{subscribe_guild_examples}\n",
+    "%%{subscribe_username_ok_help}"
   ].join("\n"),
   commands_available: {
     en: "**Commands available:**\n\n",
@@ -743,6 +750,21 @@ function extend_with_possible_array(original, el) {
   }
 }
 
+function add_ex_to_groups(groups) {
+  if (!(groups instanceof Array)) {
+    return ["Ex-" + groups, "前" + groups];
+  }
+
+  var result = [];
+  groups.forEach((group) => {
+    add_ex_to_groups(group).forEach(exname => {
+      result.push(exname);
+    });
+  });
+
+  return result;
+}
+
 function create_search(properties) {
   var search = [];
 
@@ -762,18 +784,22 @@ function create_search(properties) {
 
   if ("group" in properties) {
     extend_with_possible_array(roman_groups, properties.group);
+    extend_with_possible_array(roman_groups, add_ex_to_groups(properties.group));
   }
 
   if ("alt_groups_roman" in properties && properties.alt_groups_roman) {
     extend_with_possible_array(roman_groups, properties.alt_groups_roman);
+    extend_with_possible_array(roman_groups, add_ex_to_groups(properties.alt_groups_roman));
   }
 
   if ("group_kr" in properties) {
     extend_with_possible_array(korean_groups, properties.group_kr);
+    extend_with_possible_array(korean_groups, add_ex_to_groups(properties.group_kr));
   }
 
   if ("alt_groups" in properties && properties.alt_groups) {
     extend_with_possible_array(korean_groups, properties.alt_groups);
+    extend_with_possible_array(korean_groups, add_ex_to_groups(properties.alt_groups));
   }
 
   if ("member_name" in properties) {
@@ -816,10 +842,16 @@ function create_search(properties) {
     roman_member_names.forEach(name => {
       search.push(group + " " + name);
     });
+    korean_member_names.forEach(name => {
+      search.push(group + " " + name);
+    });
   });
 
   korean_groups.forEach(group => {
     korean_member_names.forEach(name => {
+      search.push(group + " " + name);
+    });
+    roman_member_names.forEach(name => {
       search.push(group + " " + name);
     });
   });
@@ -1970,7 +2002,7 @@ async function send_message(body) {
     var noupload_msg_en = "";
     var noupload_msg_kr = "";
     if (true && body.site === "instagram") {
-      if (body.noupload || body.group_noupload) {
+      if (body.noupload || (body.group_noupload && body.noupload !== false)) {
         //noupload_msg = " *(will likely not be uploaded)*";
         noupload_msg_en = " *(" + _("en", "noupload") + ")*";
         noupload_msg_kr = " *(" + _("kr", "noupload") + ")*";
