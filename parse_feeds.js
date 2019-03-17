@@ -169,6 +169,9 @@ function parse_hangul(text, force, obj) {
     }
   }
 
+  if (!has_hangul(text))
+    return text;
+
   var parsed = kroman.parse(text);
   var splitted = parsed.split('-');
   for (var i = 0; i < splitted.length; i++) {
@@ -1247,7 +1250,9 @@ function merge_members(member1, member2) {
     newmember.member_name_kr = member2.member_name_kr;
     newmember.member_name = member2.member_name;
     newmember.title = member2.title;
+    newmember.title_yt = member2.title_yt;
     newmember.title_kr = member2.title_kr;
+    newmember.title_kr_yt = member2.title_kr_yt;
     newmember.has_user_nick = member2.has_user_nick;
   }
 
