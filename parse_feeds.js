@@ -1505,6 +1505,7 @@ function videoid_from_youtube_url(url) {
 module.exports.videoid_from_youtube_url = videoid_from_youtube_url;
 
 function template_parse(template, variablecb) {
+  var orig_variablecb = variablecb;
   function parse_block(start, startbracket, stack) {
     if (stack > 100) {
       console.log("[ERROR] Template parsing stack reached >100");
@@ -1516,7 +1517,10 @@ function template_parse(template, variablecb) {
     var ret = "";
     var varname = "";
     var use_varname = true;
+    var varname_end = 0;
     var i = start;
+    var thelist = null;
+    var listindex = 0;
     for (i = start; i < template.length; i++) {
       var c = template[i];
 
@@ -1540,6 +1544,45 @@ function template_parse(template, variablecb) {
       if (startbracket) {
         if (c === "%") {
           type = "with";
+        } else if (c === "[") {
+          type = "list";
+          variablecb = function(x) {
+            var sx = strip(x);
+            if (sx === "$last" || sx === "$i") {
+              if (!(thelist instanceof Array))
+                return;
+
+              if (sx === "$last") {
+                return listindex + 1 >= thelist.length;
+              } else if (sx === "$i") {
+                return listindex;
+              }
+            }
+
+            if ((x.startsWith("$") && sx.length === 1) ||
+                x.startsWith("$.")) {
+              x = x.slice(1);
+              if (!(thelist instanceof Array) || listindex >= thelist.length)
+                return;
+
+              var thevar = thelist[listindex];
+
+              if (sx.length === 0 || x[0] !== '.')
+                return thevar;
+
+              while (x.length > 0 && x[0] === '.') {
+                if (typeof thevar !== "object")
+                  return;
+
+                thevar = thevar[x.replace(/^\.([^.]*).*?$/, "$1")];
+                x = x.replace(/^\.[^.]*/, "");
+              }
+
+              return thevar;
+            } else {
+              return orig_variablecb(x);
+            }
+          };
         }
 
         startbracket = false;
@@ -1551,9 +1594,34 @@ function template_parse(template, variablecb) {
         if (type === "variable") {
           ret += variablecb(varname);
         } else if (type === "with") {
-          if (variablecb(varname)) {
+          var not = false;
+          if (varname[0] === "!") {
+            varname = varname.slice(1);
+            not = true;
+          }
+
+          var varvalue = variablecb(varname);
+          if (varvalue instanceof Array && varvalue.length === 0) {
+            varvalue = false;
+          }
+
+          if ((!not && varvalue) ||
+              (not && !varvalue)) {
             return [ret, i];
           } else {
+            return ["", i];
+          }
+        } else if (type === "list") {
+          if (thelist instanceof Array) {
+            if ((listindex + 1) < thelist.length) {
+              listindex++;
+              i = varname_end;
+              continue;
+            } else {
+              variablecb = orig_variablecb;
+            }
+          } else {
+            variablecb = orig_variablecb;
             return ["", i];
           }
         }
@@ -1572,6 +1640,10 @@ function template_parse(template, variablecb) {
       } else {
         if (c === " " && use_varname) {
           use_varname = false;
+          if (type === "list") {
+            thelist = variablecb(varname);
+          }
+          varname_end = i;
           continue;
         }
 

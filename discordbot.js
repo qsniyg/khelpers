@@ -211,7 +211,7 @@ var msgs = {
     kr: "**명령:**\n\n"
   },
   unsubscribe_args: {
-    en: "rule_id",
+    en: "ruleid",
     kr: "구독ID"
   },
   unsubscribe_shorthelp: {

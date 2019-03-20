@@ -435,6 +435,47 @@ function main() {
     return;
   }
 
+  var filename_dirname = path.dirname(filename);
+  var filename_basename = path.basename(filename).replace(/\.[^/.]*$/, "");
+  var filesindir = [];
+  var coauthors = [];
+  var temp_coauthors = {};
+  try {
+    filesindir = fs.readdirSync(filename_dirname);
+  } catch (e) {
+  }
+
+  filesindir.forEach((newfilename) => {
+    if (!newfilename.startsWith(filename_basename)) {
+      return;
+    }
+
+    if (newfilename.indexOf(".coauthor.") >= 0) {
+      var coauthor = newfilename.replace(/.*?\.coauthor\./, "");
+      if (coauthor !== newfilename) {
+        var birth = 0;
+        try {
+          var stat = fs.statSync(filename_dirname + "/" + newfilename);
+          birth = parseInt(stat.birthtimeMs);
+        } catch (e) {
+        }
+
+        //coauthors.push(coauthor.toLowerCase());
+        if (!(birth in temp_coauthors)) {
+          temp_coauthors[birth] = [];
+        }
+
+        temp_coauthors[birth].push(coauthor.toLowerCase());
+      }
+    }
+  });
+
+  Object.keys(temp_coauthors).sort().forEach((coauthor_birth) => {
+    temp_coauthors[coauthor_birth].forEach((coauthor) => {
+      coauthors.push(coauthor);
+    });
+  });
+
   parse_feeds = require('./parse_feeds');
 
   var site_str = matchobj[1];
@@ -463,7 +504,8 @@ function main() {
     function resolve_username(name) {
       return base_variable(name, {
         username: username_str,
-        site: parse_feeds.feeds_toml[site_str]
+        site: parse_feeds.feeds_toml[site_str],
+        c: coauthors
       });
     }
 
@@ -479,6 +521,8 @@ function main() {
       notify_fatal("Template error: " + e);
     }
 
+    var found_accounts = {};
+    var found = false;
     for (var i = 0; i < members.length; i++) {
       var member = members[i];
       if (!member)
@@ -500,203 +544,136 @@ function main() {
       });
 
       //if (member_url.toLowerCase().indexOf("/f/instagram/u/" + username_str.toLowerCase()) >= 0) {
-      var member_username_index = member_usernames.indexOf(username_str.toLowerCase());
+      var can_add = false;
+      var add_username = null;
+      var member_username_index = member_usernames.indexOf(username_str);
       if (member_username_index >= 0) {
-        console.log(member);
-        var account = member_accounts[member_username_index];
+        found = true;
+        can_add = true;
+        add_username = username_str;
+      } else {
+        for (var j = 0; j < coauthors.length; j++) {
+          member_username_index = member_usernames.indexOf(coauthors[j]);
+          if (member_username_index >= 0) {
+            can_add = true;
+            add_username = coauthors[j];
+            break;
+          }
+        }
+      }
 
-        var info = {
+      if (can_add) {
+        found_accounts[add_username] = {
           member: member,
-
-          sitename_en: "Instagram",
-          sitename_kr: "인스타그램",
-
-          member_url: "https://www.instagram.com/" + username_str + "/"
+          account: member_accounts[member_username_index]
         };
-
-        function resolve_variable(name) {
-          return base_variable(name, {
-            m: member,
-            a: account,
-            site: parse_feeds.feeds_toml[account.site]
-          });
-        }
-
-        var new_firsttitle, new_firsttitle_kr;
-        var new_description, new_description_kr;
-        try {
-          new_firsttitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template, resolve_variable);
-          new_firsttitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template_kr, resolve_variable);
-          console.log(new_firsttitle);
-          console.log(new_firsttitle_kr);
-
-          new_description = desc_prepend + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template, resolve_variable);
-          new_description_kr = desc_prepend_kr + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template_kr, resolve_variable);
-          console.log(new_description);
-          console.log(new_description_kr);
-        } catch (e) {
-          console.log(e);
-          notify_fatal("Template error: " + e);
-        }
-
-        var name = "";
-        var member_name = "";
-        if (member.group && !member.family && !member.hide_group) {
-          if (member.ex && !member.haitus) {
-            name = "Ex-";
-          }
-
-          var grouphangul = member.group_roman;
-
-          if (member.group_noupload) {
-            grouphangul += " NOUPLOAD";
-          }
-
-          if (member.nicks_roman_first && !member.use_fullname)
-            member_name = member.nicks_roman_first;
-          else if (member.names_roman_first)
-            member_name = member.names_roman_first;
-          else
-            member_name = member.alt;
-
-          if (member_name !== grouphangul)
-            name += grouphangul + " " + member_name;
-          else
-            name += grouphangul;
-        } else {
-          if (member.nicks_roman_first &&
-              (member.has_user_nick || !(member.names_roman_first)))
-            member_name += member.nicks_roman_first;
-          else if (member.names_roman_first)
-            member_name += member.names_roman_first;
-          else
-            member_name += member.alt;
-
-          name = member_name;
-        }
-
-        var eng_kr_name;
-
-        if (member.eng_kr_name)
-          eng_kr_name = member.eng_kr_name;
-        else if (member.names && member.names[0] && member.names[0].hangul !== member_name)
-          eng_kr_name = member.names[0].hangul;
-        else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== member_name)
-          eng_kr_name = member.nicks[0].hangul;
-
-        if (eng_kr_name && eng_kr_name !== member_name)
-          name += " (" + eng_kr_name + ")";
-
-
-        var korean_name = "";
-        var korean_member_name = "";
-        if (member.group && !member.family && !member.hide_group) {
-          var kr_ex = "";
-          var kr_ex1 = "";
-          if (member.ex && !member.haitus) {
-            kr_ex = "前멤버 ";
-            kr_ex1 = "前 ";
-          }
-
-          var korean_group = member.group;
-
-          if (member.group_noupload) {
-            korean_group += " NOUPLOAD";
-          }
-
-          if (member.nicks && !member.use_fullname) {
-            if (member.nicks_hangul_first)
-              korean_member_name = member.nicks_hangul_first;
-            else if (member.nicks_roman_first)
-              korean_member_name = member.nicks_roman_first;
-          }
-
-          if (!korean_member_name) {
-            if (member.names && member.names_hangul_first)
-              korean_member_name = member.names_hangul_first;
-            else
-              korean_member_name = member.alt;
-          }
-
-          if (korean_member_name !== korean_group)
-            //korean_name += korean_group + " " + kr_ex + korean_member_name;
-            korean_name += kr_ex1 + korean_group + " " + korean_member_name;
-          else
-            korean_name += korean_group;
-        } else {
-          if (member.nicks && (member.nicks_hangul_first || member.nicks_roman_first) &&
-              (member.has_user_nick || !(member.names_roman_first))) {
-            korean_member_name += member.nicks_hangul_first || member.nicks_roman_first;
-          } else if (member.names && member.names_hangul_first) {
-            korean_member_name += member.names_hangul_first;
-          } else {
-            korean_member_name += member.alt;
-          }
-
-          korean_name = korean_member_name;
-        }
-
-        var kr_kr_name;
-
-        if (member.names && member.names[0] && member.names[0].hangul !== korean_member_name)
-          kr_kr_name = member.names[0].hangul;
-        else if (member.nicks && member.nicks[0] && member.nicks[0].hangul !== korean_member_name &&
-                 member.has_user_nick)
-          kr_kr_name = member.nicks[0].hangul;
-
-        if (kr_kr_name && kr_kr_name !== korean_member_name)
-          korean_name += " (" + kr_kr_name + ")";
-
-        if ("tags" in parse_feeds.feeds_toml[site_str]) {
-          parse_feeds.feeds_toml[site_str].tags.forEach(tag => {
-            parse_feeds.upush(member.tags, tag);
-          });
-        }
-        member.tags.push(username_str);
-
-        var privacy = "private";
-        if (account.upload_privacy &&
-            (account.upload_privacy === "unlisted" ||
-             account.upload_privacy === "public")) {
-          privacy = account.upload_privacy;
-          console.log("Privacy: "+ privacy);
-        }
-
-        if (!yt_playlist && member.playlist && member.playlist.length >= 10) {
-          yt_playlist = member.playlist;
-        }
-
-        do_upload({
-          firsttitle: new_firsttitle,
-          firsttitle_korean: new_firsttitle_kr,
-          endtitle: endtitle,
-          endtitle_kr: endtitle_kr,
-          timestamp: timestamp,
-          description: new_description,
-          description_kr: new_description_kr,
-          tags: member.tags,
-          file: real_filename,
-          privacy: privacy,
-          youtube_id: youtubeid,
-          yt_playlist: yt_playlist
-        });
-        return;
       }
     }
 
-    do_upload({
-      firsttitle,
-      firsttitle_korean: firsttitle_kr,
-      endtitle,
-      endtitle_kr,
-      timestamp,
-      description: description,
-      description_kr: description_kr,
-      file: real_filename,
-      tags: [username_str],
-      youtube_id: youtubeid,
-      yt_playlist: yt_playlist
-    });
+    if (!found) {
+      do_upload({
+        firsttitle,
+        firsttitle_korean: firsttitle_kr,
+        endtitle,
+        endtitle_kr,
+        timestamp,
+        description: description,
+        description_kr: description_kr,
+        file: real_filename,
+        tags: [username_str],
+        youtube_id: youtubeid,
+        yt_playlist: yt_playlist
+      });
+    } else {
+      var found_account = found_accounts[username_str];
+      var member = found_account.member;
+      var account = found_account.account;
+
+      var coauthor_members = [];
+      coauthors.forEach((coauthor) => {
+        var found_coauthor = found_accounts[coauthor];
+        if (!found_coauthor || !found_coauthor.member || !found_coauthor.account) {
+          console.log("Skipping coauthor: @" + coauthor);
+          return;
+        }
+
+        var group = found_coauthor.member.group;
+        var coauthor_title = found_coauthor.member.title;
+        var coauthor_title_kr = found_coauthor.member.title_kr;
+        if (group && group === member.group) {
+          coauthor_title = found_coauthor.member.member_name;
+          coauthor_title_kr = found_coauthor.member.member_name_kr;
+        }
+        coauthor_members.push({
+          m: found_coauthor.member,
+          a: found_coauthor.account,
+          t: coauthor_title,
+          tk: coauthor_title_kr
+        });
+      });
+
+      function resolve_variable(name) {
+        return base_variable(name, {
+          m: member,
+          a: account,
+          cm: coauthor_members,
+          c: coauthors,
+          site: parse_feeds.feeds_toml[account.site]
+        });
+      }
+
+      var new_firsttitle, new_firsttitle_kr;
+      var new_description, new_description_kr;
+      try {
+        new_firsttitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template, resolve_variable);
+        new_firsttitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_title_template_kr, resolve_variable);
+        console.log(new_firsttitle);
+        console.log(new_firsttitle_kr);
+
+        new_description = desc_prepend + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template, resolve_variable);
+        new_description_kr = desc_prepend_kr + parse_feeds.template_parse(parse_feeds.feeds_toml.general.member_description_template_kr, resolve_variable);
+        console.log(new_description);
+        console.log(new_description_kr);
+      } catch (e) {
+        console.log(e);
+        notify_fatal("Template error: " + e);
+      }
+
+      if ("tags" in parse_feeds.feeds_toml[site_str]) {
+        parse_feeds.feeds_toml[site_str].tags.forEach(tag => {
+          parse_feeds.upush(member.tags, tag);
+        });
+      }
+      member.tags.push(username_str);
+
+      var privacy = "private";
+      if (account.upload_privacy &&
+          (account.upload_privacy === "unlisted" ||
+           account.upload_privacy === "public")) {
+        privacy = account.upload_privacy;
+        console.log("Privacy: "+ privacy);
+      }
+
+      if (!yt_playlist && member.playlist && member.playlist.length >= 10) {
+        yt_playlist = member.playlist;
+      }
+
+      do_upload({
+        firsttitle: new_firsttitle,
+        firsttitle_korean: new_firsttitle_kr,
+        endtitle: endtitle,
+        endtitle_kr: endtitle_kr,
+        timestamp: timestamp,
+        description: new_description,
+        description_kr: new_description_kr,
+        tags: member.tags,
+        file: real_filename,
+        privacy: privacy,
+        youtube_id: youtubeid,
+        yt_playlist: yt_playlist
+      });
+      return;
+    }
   }).catch((e) => {
     console.error(e);
   });
@@ -709,6 +686,11 @@ function do_upload(options) {
 
   options.title = options.firsttitle + options.endtitle;
   options.title_korean = options.endtitle_kr + " " + options.firsttitle_korean;
+
+  if (noupload) {
+    console.log(options);
+    return;
+  }
 
   get_videos().then((data) => {
     var count = 0;
