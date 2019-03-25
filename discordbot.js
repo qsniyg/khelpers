@@ -1932,46 +1932,106 @@ client.on('raw', async function(event) {
 
 var clear_activity_timeout = null;
 var clear_activity_time = 60*1000;
-var current_watching = null;
-async function clear_status() {
+var current_watching = [];
+var current_watching_id = 0;
+var current_watching_change_date = 0;
+var current_watching_change_time = 20*1000;
+async function clear_status(guid) {
   try {
-    //await client.user.setActivity(null);
-    await reset_activity();
+    var id = -1;
+    for (var i = 0; i < current_watching.length; i++) {
+      if (current_watching[i].broadcast_guid === guid) {
+        id = i;
+        break;
+      }
+    }
 
-    if (clear_activity_timeout) {
+    if (id >= 0) {
+      if (current_watching[id].clear_timeout) {
+        clearTimeout(current_watching[id].clear_timeout);
+        current_watching[id].clear_timeout = null;
+      }
+
+      current_watching.splice(id, 1);
+
+      if (current_watching_id === id) {
+        current_watching_id++;
+        current_watching_id = current_watching_id % current_watching.length;
+        current_watching_change_date = Date.now() + current_watching_change_time;
+      } else if (current_watching_id > id) {
+        current_watching_id--;
+      }
+    }
+
+    if (current_watching.length <= 0) {
+      //await client.user.setActivity(null);
+      await reset_activity();
+    }
+
+    /*if (clear_activity_timeout) {
       clearTimeout(clear_activity_timeout);
       clear_activity_timeout = null;
     }
 
     if (current_watching) {
       current_watching = null;
-    }
+    }*/
   } catch (e) {
     console.error("Error clearing activity: ", e);
   }
 }
 
 async function set_status(body) {
-  if (!body || body.type !== "live")
+  if (!body || body.type !== "live" || !body.broadcast_guid)
     return;
 
-  if (current_watching && current_watching.date && body.date && body.date < current_watching.date)
-    return;
+  /*if (current_watching && current_watching.date && body.date && body.date < current_watching.date)
+    return;*/
 
-  if (clear_activity_timeout) {
-    clearTimeout(clear_activity_timeout);
-    clear_activity_timeout = null;
+  var id = -1;
+  for (var i = 0; i < current_watching.length; i++) {
+    if (current_watching[i].broadcast_guid === body.broadcast_guid) {
+      id = i;
+      break;
+    }
   }
 
+  if (id < 0) {
+    id = current_watching.length;
+    current_watching.push(body);
+  }
+
+  if (current_watching[id].clear_timeout) {
+    clearTimeout(current_watching[id].clear_timeout);
+    current_watching[id].clear_timeout = setTimeout(
+      function() {
+        clear_status(body.broadcast_guid);
+      },
+      clear_activity_time);
+  }
+
+  /*if (clear_activity_timeout) {
+    clearTimeout(clear_activity_timeout);
+    clear_activity_timeout = null;
+    }*/
+
+  if (Date.now() > current_watching_change_date) {
+    current_watching_id++;
+    current_watching_change_date = Date.now() + current_watching_change_time;
+  }
+
+  current_watching_id = current_watching_id % current_watching.length;
+
   try {
-    var status = body.name;
-    if (body.site && body.site in short_sites)
-      status += " | " + short_sites[body.site];
+    var current = current_watching[current_watching_id];
+    var status = current.name;
+    if (current.site && current.site in short_sites)
+      status += " | " + short_sites[current.site];
 
     await client.user.setActivity(status, { type: 'WATCHING' });
 
-    current_watching = body;
-    clear_activity_timeout = setTimeout(clear_status, clear_activity_time);
+    //current_watching = body;
+    //clear_activity_timeout = setTimeout(clear_status, clear_activity_time);
   } catch (e) {
     console.error(e);
   }

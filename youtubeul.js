@@ -587,6 +587,7 @@ function main() {
     } else {
       var found_account = found_accounts[username_str];
       var member = found_account.member;
+      console.log(member);
       var account = found_account.account;
 
       var coauthor_members = [];
