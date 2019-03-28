@@ -2003,12 +2003,13 @@ async function set_status(body) {
 
   if (current_watching[id].clear_timeout) {
     clearTimeout(current_watching[id].clear_timeout);
-    current_watching[id].clear_timeout = setTimeout(
+  }
+
+  current_watching[id].clear_timeout = setTimeout(
       function() {
         clear_status(body.broadcast_guid);
       },
-      clear_activity_time);
-  }
+    clear_activity_time);
 
   /*if (clear_activity_timeout) {
     clearTimeout(clear_activity_timeout);
