@@ -3271,8 +3271,40 @@ function main() {
                               resolve();
                               return;
                             }
-                            var comments = node.edge_media_to_comment.edges;
+                            var orig_comments = node.edge_media_to_parent_comment.edges;
+                            var comments = [];
                             var importantcomments = {};
+
+                            function add_comment(comment) {
+                              if ("node" in comment)
+                                comment = comment.node;
+
+                              for (let i = 0; i < comments.length; i++) {
+                                if (comments[i].id === comment.id)
+                                  return;
+                              }
+
+                              comments.push(comment);
+
+                              if ("edge_threaded_comments" in comment) {
+                                comment.edge_threaded_comments.edges.forEach(sub_comment => {
+                                  add_comment(sub_comment);
+                                });
+                              }
+                            }
+
+                            orig_comments.forEach(comment => {
+                              add_comment(comment);
+                            });
+
+                            comments.sort((x, y) => {
+                              if (x.created_at < y.created_at)
+                                return -1;
+                              if (x.created_at > y.created_at)
+                                return 1;
+                              return 0;
+                            });
+
 
                             function process_comment(comment) {
                               if (comment.created_at in importantcomments)
@@ -3290,7 +3322,8 @@ function main() {
 
                             function do_comments(user) {
                               for (var j = 0; j < comments.length; j++) {
-                                var comment = comments[j].node;
+                                //var comment = comments[j].node;
+                                var comment =  comments[j];
                                 if (comment.created_at in importantcomments)
                                   continue;
                                 if (important_instagram_usernames.indexOf(comment.owner.username) >= 0) {
@@ -3318,7 +3351,7 @@ function main() {
                             }
 
                             mentries[nick][entry.created].push(entrytext);
-                            console.log("Comments: " + (++promises_done) + "/" + promises.length + " (" + Object.keys(importantcomments).length + "/" + comments.length + "/" + node.edge_media_to_comment.count + ")");
+                            console.log("Comments: " + (++promises_done) + "/" + promises.length + " (" + Object.keys(importantcomments).length + "/" + comments.length + "/" + node.edge_media_to_parent_comment.count + ")");
                             resolve();
                           });
                 });

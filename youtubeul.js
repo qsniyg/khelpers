@@ -139,8 +139,10 @@ function add_to_playlist(youtube, playlist, video, cb) {
 }
 
 function notify_fatal(message) {
+  if (!the_filename)
+    the_filename = "";
   notifier.notify({
-    title: "[YTUL] Fatal",
+    title: "[YTUL] Fatal " + the_filename,
     message
   });
   process.exit();
@@ -375,6 +377,7 @@ var noupload = false;
 var reupload = false;
 var youtubeid = null;
 var desc_prepend = "";
+var the_filename = null;
 var desc_prepend_kr = "";
 function main() {
   var argv = [];
@@ -390,6 +393,7 @@ function main() {
   var filename = process.argv[2];
   //console.log(filename);
   var real_filename = filename;
+  the_filename = real_filename;
   var yt_playlist = null;
 
   //var dmupload = false;
@@ -593,7 +597,8 @@ function main() {
       var coauthor_members = [];
       coauthors.forEach((coauthor) => {
         var found_coauthor = found_accounts[coauthor];
-        if (!found_coauthor || !found_coauthor.member || !found_coauthor.account) {
+        if (!found_coauthor || !found_coauthor.member || !found_coauthor.account ||
+            !found_coauthor.member.title || found_coauthor.member.title[0] == "@") {
           console.log("Skipping coauthor: @" + coauthor);
           return;
         }

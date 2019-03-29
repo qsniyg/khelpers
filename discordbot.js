@@ -1955,7 +1955,7 @@ async function clear_status(guid) {
       current_watching.splice(id, 1);
 
       if (current_watching_id === id) {
-        current_watching_id++;
+        //current_watching_id++;
         current_watching_id = current_watching_id % current_watching.length;
         current_watching_change_date = Date.now() + current_watching_change_time;
       } else if (current_watching_id > id) {
@@ -2022,9 +2022,20 @@ async function set_status(body) {
   }
 
   current_watching_id = current_watching_id % current_watching.length;
+  if (isNaN(current_watching_id))
+    current_watching_id = 0;
+
+  if (current_watching.length === 0)
+    return;
 
   try {
     var current = current_watching[current_watching_id];
+    if (!current) {
+      console.log(current_watching);
+      console.log(current_watching.length + " " + current_watching_id);
+      return;
+    }
+
     var status = current.name;
     if (current.site && current.site in short_sites)
       status += " | " + short_sites[current.site];

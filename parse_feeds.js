@@ -1505,8 +1505,17 @@ function videoid_from_youtube_url(url) {
 module.exports.videoid_from_youtube_url = videoid_from_youtube_url;
 
 function template_parse(template, variablecb) {
-  var orig_variablecb = variablecb;
-  function parse_block(start, startbracket, stack) {
+  (function(orig_variablecb) {
+    variablecb = function(x) {
+      if (x === "$!length") {
+        return 0;
+      }
+      return orig_variablecb(x);
+    };
+  })(variablecb);
+
+  var total_length = 0;
+  function parse_block(variablecb, start, startbracket, stack) {
     if (stack > 100) {
       console.log("[ERROR] Template parsing stack reached >100");
       return "";
@@ -1521,6 +1530,16 @@ function template_parse(template, variablecb) {
     var i = start;
     var thelist = null;
     var listindex = 0;
+
+    (function(orig_variablecb) {
+      variablecb = function(x) {
+        if (x === "$!length") {
+          return orig_variablecb(x) + ret.length;
+        }
+        return orig_variablecb(x);
+      };
+    })(variablecb);
+
     for (i = start; i < template.length; i++) {
       var c = template[i];
 
@@ -1528,7 +1547,7 @@ function template_parse(template, variablecb) {
          if (startbracket) {
            type = "variable";
         } else {
-          var newtext = parse_block(i+1, true, stack+1);
+          var newtext = parse_block(variablecb, i+1, true, stack+1);
           i = newtext[1];
           if (use_varname && type !== null)
             varname += newtext[0];
@@ -1546,43 +1565,45 @@ function template_parse(template, variablecb) {
           type = "with";
         } else if (c === "[") {
           type = "list";
-          variablecb = function(x) {
-            var sx = strip(x);
-            if (sx === "$last" || sx === "$i") {
-              if (!(thelist instanceof Array))
-                return;
-
-              if (sx === "$last") {
-                return listindex + 1 >= thelist.length;
-              } else if (sx === "$i") {
-                return listindex;
-              }
-            }
-
-            if ((x.startsWith("$") && sx.length === 1) ||
-                x.startsWith("$.")) {
-              x = x.slice(1);
-              if (!(thelist instanceof Array) || listindex >= thelist.length)
-                return;
-
-              var thevar = thelist[listindex];
-
-              if (sx.length === 0 || x[0] !== '.')
-                return thevar;
-
-              while (x.length > 0 && x[0] === '.') {
-                if (typeof thevar !== "object")
+          (function(orig_variablecb) {
+            variablecb = function(x) {
+              var sx = strip(x);
+              if (sx === "$last" || sx === "$i") {
+                if (!(thelist instanceof Array))
                   return;
 
-                thevar = thevar[x.replace(/^\.([^.]*).*?$/, "$1")];
-                x = x.replace(/^\.[^.]*/, "");
+                if (sx === "$last") {
+                  return listindex + 1 >= thelist.length;
+                } else if (sx === "$i") {
+                  return listindex;
+                }
               }
 
-              return thevar;
-            } else {
-              return orig_variablecb(x);
-            }
-          };
+              if ((x.startsWith("$") && sx.length === 1) ||
+                  x.startsWith("$.")) {
+                x = x.slice(1);
+                if (!(thelist instanceof Array) || listindex >= thelist.length)
+                  return;
+
+                var thevar = thelist[listindex];
+
+                if (sx.length === 0 || x[0] !== '.')
+                  return thevar;
+
+                while (x.length > 0 && x[0] === '.') {
+                  if (typeof thevar !== "object")
+                    return;
+
+                  thevar = thevar[x.replace(/^\.([^.]*).*?$/, "$1")];
+                  x = x.replace(/^\.[^.]*/, "");
+                }
+
+                return thevar;
+              } else {
+                return orig_variablecb(x);
+              }
+            };
+          })(variablecb);
         }
 
         startbracket = false;
@@ -1595,14 +1616,39 @@ function template_parse(template, variablecb) {
           ret += variablecb(varname);
         } else if (type === "with") {
           var not = false;
+          var our_op = null;
+          var opval = null;
+          var ops = {
+            "==": function(a, b) { return a == b; },
+            "!=": function(a, b) { return a != b; },
+            ">": function(a, b) { return parseInt(a) > parseInt(b); },
+            ">=": function(a, b) { return parseInt(a) >= parseInt(b); },
+            "<": function(a, b) { return parseInt(a) < parseInt(b); },
+            "<=": function(a, b) { return parseInt(a) <= parseInt(b); }
+          };
           if (varname[0] === "!") {
             varname = varname.slice(1);
             not = true;
           }
 
+          for (var op in ops) {
+            if (varname.indexOf(op) > 0) {
+              var split_result = varname.split(op);
+              varname = split_result[0];
+              our_op = op;
+              opval = split_result[1];
+              break;
+            }
+          }
+
           var varvalue = variablecb(varname);
-          if (varvalue instanceof Array && varvalue.length === 0) {
-            varvalue = false;
+
+          if (our_op === null) {
+            if (varvalue instanceof Array && varvalue.length === 0) {
+              varvalue = false;
+            }
+          } else {
+            varvalue = ops[our_op](varvalue, opval);
           }
 
           if ((!not && varvalue) ||
@@ -1618,10 +1664,10 @@ function template_parse(template, variablecb) {
               i = varname_end;
               continue;
             } else {
-              variablecb = orig_variablecb;
+              //variablecb = orig_variablecb;
             }
           } else {
-            variablecb = orig_variablecb;
+            //variablecb = orig_variablecb;
             return ["", i];
           }
         }
@@ -1657,7 +1703,7 @@ function template_parse(template, variablecb) {
 
     return [ret, i-1];
   }
-  return parse_block(0, false, 0)[0];
+  return parse_block(variablecb, 0, false, 0)[0];
 }
 module.exports.template_parse = template_parse;
 
