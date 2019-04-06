@@ -2785,6 +2785,9 @@ function main() {
         if (group_members[i].weibo_obj)
         urls.push(group_members[i].weibo_obj.url);*/
         group_members[i].accounts.forEach((account) => {
+          if (!account || !account.obj)
+            return;
+
           urls.push(account.obj.url);
         });
       }

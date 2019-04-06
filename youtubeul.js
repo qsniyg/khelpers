@@ -440,7 +440,7 @@ function main() {
   }
 
   var filename_dirname = path.dirname(filename);
-  var filename_basename = path.basename(filename).replace(/\.[^/.]*$/, "");
+  var filename_basename = path.basename(filename).replace(/(?: REPLAY.)?\.[^/.]*$/, "");
   var filesindir = [];
   var coauthors = [];
   var temp_coauthors = {};

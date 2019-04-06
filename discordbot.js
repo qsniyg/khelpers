@@ -371,6 +371,7 @@ var msgs = {
     en: "Replay of **%%1**'s %%2 livestream",
     kr: "**%%1** %%2에서 하셨던 라이브 다시보기"
   },
+  ft: "ft. **%%1**",
   emoji_subscribe: {
     en: "Use " + subscribe_emoji + " to subscribe to future %%1 by this person",
     kr: subscribe_emoji + " 클릭하시면 이 분의 %%1를 앞으로 알려줄 것입니다"
@@ -518,6 +519,18 @@ function uremove(array, item) {
   }
 }
 
+function common_element_in_arrays(array1, array2) {
+  if (!array1 || !array2 || !(array1 instanceof Array) || !(array2 instanceof Array))
+    return false;
+
+  for (const item1 of array1) {
+    if (array2.indexOf(item1) >= 0)
+      return true;
+  }
+
+  return false;
+}
+
 function init_message(properties, text, message) {
   if (!properties)
     properties = {type: "other"};
@@ -566,7 +579,7 @@ function senddm(userid, text, properties) {
   });
 }
 
-async function send_channel(guildid, channelid, text, properties) {
+async function send_channel(guildid, channelid, pings, text, properties) {
   var guild = client.guilds.get(guildid);
   if (!guild) {
     return null;
@@ -581,6 +594,10 @@ async function send_channel(guildid, channelid, text, properties) {
   properties = init_message(properties, text, message);
   properties.guild = guildid;
   properties.channel = channelid;
+
+  properties.pings = [];
+  if (pings)
+    properties.pings = pings;
 
   db_messages.insert(properties);
 
@@ -2069,6 +2086,9 @@ async function send_message(body) {
     break;
   }
 
+  if (!body.coauthors)
+    body.coauthors = [];
+
   if (body.type === "live" ||
       body.type === "replay") {
     var noupload_msg_en = "";
@@ -2081,12 +2101,14 @@ async function send_message(body) {
       }
     }
 
-    var message_text, message_text, subscribe_msg, unsubscribe_msg;
+    var message_text, subscribe_msg, unsubscribe_msg;
 
     if (body.type === "live") {
       //message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
-      var message_text_en = _("en", "is_live_on", body.name, _("en", sitename)) + noupload_msg_en;
-      var message_text_kr = _("kr", "is_live_on", body.name_kr, _("kr", sitename)) + noupload_msg_kr;
+      let message_text_en = _("en", "is_live_on", body.name, _("en", sitename)) + noupload_msg_en;
+      body.coauthors.forEach(coauthor => { message_text_en += "\n" + _("en", "ft", coauthor.name); });
+      let message_text_kr = _("kr", "is_live_on", body.name_kr, _("kr", sitename)) + noupload_msg_kr;
+      body.coauthors.forEach(coauthor => { message_text_kr += "\n" + _("kr", "ft", coauthor.name_kr); });
       message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.watch_link + "\n\n";
 
       //subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future lives by this person*";
@@ -2099,8 +2121,10 @@ async function send_message(body) {
         _("kr", "emoji_unsubscribe", _("kr", "lives"));
     } else if (body.type === "replay") {
       //message_text = "Replay of **" + body.name + "**'s " + sitename + " livestream\n\n" + body.broadcast_guid + "\n\n";
-      var message_text_en = _("en", "replay_of", body.name, _("en", sitename));
-      var message_text_kr = _("kr", "replay_of", body.name_kr, _("kr", sitename));
+      let message_text_en = _("en", "replay_of", body.name, _("en", sitename));
+      body.coauthors.forEach(coauthor => { message_text_en += "\n" + _("en", "ft", coauthor.name); });
+      let message_text_kr = _("kr", "replay_of", body.name_kr, _("kr", sitename));
+      body.coauthors.forEach(coauthor => { message_text_kr += "\n" + _("kr", "ft", coauthor.name_kr); });
       message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.broadcast_guid + "\n\n";
 
       //subscribe_msg = "*Use " + subscribe_emoji + " to subscribe to future replays by this person*";
@@ -2115,6 +2139,46 @@ async function send_message(body) {
 
     var account = await find_account(body);
     var rules = await get_rules_for_account(account, body.type === "replay");
+
+    for (var coauthor of body.coauthors) {
+      coauthor.site = body.site;
+      let coauthor_account = await find_account(coauthor);
+      let coauthor_rules = await get_rules_for_account(coauthor_account, body.type === "replay");
+      for (const coauthor_rule of coauthor_rules) {
+        var can_add = true;
+        for (const rule of rules) {
+          if (rule.rule_id === coauthor_rule.rule_id) {
+            can_add = false;
+            break;
+          }
+
+          if (rule.user && rule.user === coauthor_rule.user) {
+            can_add = false;
+            break;
+          }
+
+          if (rule.guild && rule.guild === coauthor_rule.guild) {
+            if (rule.channel && rule.channel === coauthor_rule.channel) {
+              can_add = false;
+              break;
+            }
+
+            var has_ping = false;
+            if (rule.ping_roles && coauthor_rule.ping_roles) {
+              if (common_element_in_arrays(rule.ping_roles,
+                                           coauthor_rule.ping_roles)) {
+                can_add = false;
+                break;
+              }
+            }
+          }
+        }
+
+        if (can_add) {
+          rules.push(coauthor_rule);
+        }
+      }
+    }
 
     try {
       set_status(body);
@@ -2137,6 +2201,8 @@ async function send_message(body) {
         }
 
         this_text = ping_text + this_text;
+      } else {
+        rule.ping_roles = [];
       }
 
       var properties = {
@@ -2155,26 +2221,28 @@ async function send_message(body) {
 
       if (rule.user) {
         query.user = rule.user;
-        var already_messaged = await db_messages.find(query);
+        this_text += unsubscribe_msg;
+        let already_messaged = await db_messages.find(query);
         if (already_messaged && already_messaged.length > 0) {
-          return;
+          return await ensure_message_text(already_messaged, this_text);
         }
 
         console.log("Notifying user " + rule.user + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
-        var message = await senddm(rule.user, this_text + unsubscribe_msg, properties);
+        let message = await senddm(rule.user, this_text, properties);
         message.react(unsubscribe_emoji);
       } else if (rule.guild && rule.channel) {
         query.guild = rule.guild;
         query.channel = rule.channel;
-        var already_messaged = await db_messages.find(query);
+        this_text += subscribe_msg;
+        let already_messaged = await db_messages.find(query);
         if (already_messaged && already_messaged.length > 0) {
-          return;
+          return await ensure_message_text(already_messaged, this_text);
         }
 
         console.log("Notifying channel " + rule.channel + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
-        var message = await send_channel(rule.guild, rule.channel, this_text + subscribe_msg, properties);
+        let message = await send_channel(rule.guild, rule.channel, rule.ping_roles, this_text, properties);
         await message.react(subscribe_emoji);
         //await message.react(unsubscribe_emoji);
       }
@@ -2203,17 +2271,21 @@ async function send_message(body) {
   }
 };
 
-fastify.post('/add', (request, reply) => {
+fastify.post('/add', async (request, reply) => {
   try {
 
     //console.log(request.body);
-    add_account(request.body).then(
-      account => {
-        if (request.body.type !== "account") {
-          send_message(request.body);
-        }
+    await add_account(request.body);
+    if (request.body.coauthors) {
+      for (var coauthor of request.body.coauthors) {
+        coauthor.site = request.body.site;
+        await add_account(coauthor);
       }
-    );
+    }
+
+    if (request.body.type !== "account") {
+      send_message(request.body);
+    }
 
     reply.send({status: "ok"});
   } catch (err) {
@@ -2318,6 +2390,37 @@ async function do_delete(body) {
         console.error(err);
         console.log("Failed to delete message:", message);
       }
+    }
+  }
+}
+
+async function ensure_message_text(messages, text) {
+  for (var i = 0; i < messages.length; i++) {
+    var message = messages[i];
+
+    if (message.text === text) {
+      continue;
+    }
+
+    try {
+      var dmessage = null;
+
+      if (message.guild) {
+        var guild = client.guilds.get(message.guild);
+        var channel = guild.channels.get(message.channel);
+        dmessage = await channel.fetchMessage(message.messageid);
+      } else if (message.user) {
+        var user = await client.fetchUser(message.user);
+        var channel = await user.createDM();
+        dmessage = await channel.fetchMessage(message.messageid);
+      }
+
+      console.log("Editing message #" + message.messageid);
+      await dmessage.edit(text);
+      await db_messages.update(message._id, {"$set": {"text": text}});
+    } catch (err) {
+      console.error(err);
+      console.log("Failed to edit message:", message);
     }
   }
 }

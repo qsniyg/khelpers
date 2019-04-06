@@ -142,7 +142,123 @@ process.stdin.on('readable', function() {
   const chunk = process.stdin.read();
   if (chunk !== null)
     input_chunks.push(chunk);
-});*/
+    });*/
+
+function get_member_and_account(members, options) {
+  var username = options.username;
+  var site = options.site;
+
+  for (var i = 0; i < members.length; i++) {
+    var member = members[i];
+    var account = null;
+    if (!member || !(account = is_member_account(member, username, site)))
+      continue;
+
+    if (!can_share(member, account))
+      return null;
+
+    return {
+      member,
+      account
+    };
+  }
+
+  return null;
+}
+
+function new_main(members, options) {
+  var ma = get_member_and_account(members, options);
+  if (!ma)
+    return;
+
+  var coauthors = [];
+  if (options.coauthors) {
+    for (var i = 0; i < options.coauthors.length; i++) {
+      var coauthor_ma = get_member_and_account(members, {
+        username: options.coauthors[i],
+        site: options.site
+      });
+
+      if (!coauthor_ma)
+        continue;
+
+      coauthors.push({
+        username: coauthor_ma.account.username,
+        group: coauthor_ma.member.group_romans,
+        group_kr: coauthor_ma.member.group,
+        name: coauthor_ma.member.title,
+        name_kr: coauthor_ma.member.title_kr,
+        names: coauthor_ma.member.names,
+        nicks: coauthor_ma.member.nicks,
+        member_name: coauthor_ma.member.member_name,
+        member_name_kr: coauthor_ma.member.member_name_kr,
+        noupload: coauthor_ma.member.noupload,
+        group_noupload: coauthor_ma.member.group_noupload
+      });
+    }
+  }
+
+  var member = ma.member;
+  var account = ma.account;
+
+  //console.log(member);
+  var properties = get_properties(account);
+  var result = {
+    type: options.type,
+    site: options.site,
+    username: account.username,
+    //member_type: "group_member",
+    group: member.group_romans,
+    group_kr: member.group,
+    profile_link: account.link,
+    watch_link: account.link,
+    name: member.title,
+    name_kr: member.title_kr,
+    names: member.names,
+    nicks: member.nicks,
+    member_name: member.member_name,
+    member_name_kr: member.member_name_kr,
+    noupload: member.noupload,
+    group_noupload: member.group_noupload,
+    coauthors: coauthors
+  };
+
+  if (options.guid) {
+    result.broadcast_guid = options.guid;
+  }
+
+  if (options.watch_link) {
+    result.watch_link = options.watch_link;
+  }
+
+  if (options.time) {
+    result.date = options.time;
+  }
+
+  if (properties) {
+    result.uid = properties.uid;
+  }
+
+  if (options.video_title) {
+    result.video_title = options.video_title;
+  }
+
+  if (member.alt_groups) {
+    result.alt_groups = member.alt_groups;
+  }
+
+  if (member.alt_groups_roman) {
+    result.alt_groups_roman = member.alt_groups_roman;
+  }
+
+  //console.log(result);
+
+  request.post({
+    uri: 'http://localhost:8456/add',
+    method: 'POST',
+    json: result
+  });
+}
 
 function main(members, options) {
   var username = options.username;
@@ -224,7 +340,7 @@ function init_main(cb) {
 
 function do_main_loop(members, items) {
   for (var i = 0; i < items.length; i++) {
-    main(members, items[i]);
+    new_main(members, items[i]);
   }
 }
 
@@ -275,6 +391,7 @@ function process_lives(parsed) {
       site,
       watch_link,
       username: entry.author,
+      coauthors: entry.coauthors,
       time: entry.date * 1000
     });
   }
@@ -298,6 +415,18 @@ function process_replays(parsed) {
       continue;
     }
 
+    var coauthors = [];
+    var comatch = entry.description.match(/^ *ft\. https?:\/\/[^/]*\/[^/]*\/? *$/mg);
+    if (comatch) {
+      for (var j = 0; j < comatch.length; j++) {
+        var matchtext = comatch[j];
+        var ourmatch = matchtext.match(/^ *ft\. https?:\/\/[^/]*\/([^/]*)\/? *$/m);
+        if (ourmatch) {
+          coauthors.push(ourmatch[1]);
+        }
+      }
+    }
+
     username = username[1];
 
     replays.push({
@@ -305,6 +434,7 @@ function process_replays(parsed) {
       guid: entry.url,
       site: "instagram",
       username: username,
+      coauthors,
       time: entry.date * 1000,
       video_title: entry.caption
     });
