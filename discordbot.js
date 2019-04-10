@@ -2026,6 +2026,8 @@ async function set_status(body) {
   if (id < 0) {
     id = current_watching.length;
     current_watching.push(body);
+  } else {
+    current_watching[id].name = body.name;
   }
 
   if (current_watching[id].clear_timeout) {
