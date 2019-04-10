@@ -459,6 +459,8 @@ function get_name(text, member) {
       return;
     }
     var username = account.username.toLowerCase();
+    if (account.site === "youtube")
+      username = account.username;
     var key = account.site + "/@" + username;
     if (key in feeds_toml) {
       var newalt = feeds_toml[key];
@@ -742,6 +744,13 @@ function get_username_from_rssit_obj(obj) {
   var props = get_description_properties(obj.description);
   if (props && props.username)
     return props.username;
+
+  if (obj.link) {
+    var channellink = obj.link.replace(/^[a-z]+:\/\/(?:www\.)?youtube\.com\/channel\/+(UC[^/]*)(?:[?#].*)?$/,
+                                       "$1");
+    if (channellink !== obj.link)
+      return channellink;
+  }
 }
 module.exports.get_username_from_rssit_obj = get_username_from_rssit_obj;
 
@@ -790,6 +799,7 @@ function parse_member(obj, options) {
     "link": obj.link,
     obj
   }];
+
 
   var name = get_name(obj.name, member);
   if (name && (name.names || name.nicks)) {
@@ -1468,6 +1478,7 @@ function parse_feeds_inner() {
         do_sns("twitter");
         do_sns("weibo");
         do_sns("periscope");
+        do_sns("youtube");
 
         resolve(module.exports.members);
       })

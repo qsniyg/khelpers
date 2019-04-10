@@ -1358,8 +1358,17 @@ async function unsubscribe(message, ruleid) {
 
 async function reset_activity() {
   //await client.user.setPresence({game: null});
-  client.user.setActivity(null);
+  //return await client.user.setActivity(null);
+  return await set_guilds_activity();
   //client.user.setPresence({game: {name: " ", type: 0}});
+}
+
+async function set_guilds_activity() {
+  if (!client || !client.user)
+    return;
+
+  if (current_watching.length <= 0)
+    return await client.user.setActivity(client.guilds.size + " servers", { type: 'WATCHING' });
 }
 
 client.on('ready', async () => {
@@ -1402,6 +1411,7 @@ async function check_accepted_guild(guild) {
 
 client.on('guildCreate', guild => {
   check_accepted_guild(guild);
+  set_guilds_activity();
 });
 
 client.on('message', async message => {

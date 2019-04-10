@@ -469,14 +469,14 @@ function process_add_account() {
       for (var j = 0; j < member.accounts.length; j++) {
         var account = member.accounts[j];
 
-        if (account.site !== "instagram")
+        if (account.site !== "instagram" && account.site !== "youtube")
           continue;
 
-        var text = member.title + " @" + account.username;
+        var text = member.title + " @" + account.username + " (" + account.site + ")";
         if (readlineSync.keyInYNStrict(text)) {
           accounts.push({
             type: "account",
-            site: "instagram",
+            site: account.site,
             username: account.username,
             can_share: can_share(member, account)
           });

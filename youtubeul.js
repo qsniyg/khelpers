@@ -516,8 +516,8 @@ function main() {
     try {
       firsttitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_title_template, resolve_username);
       firsttitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_title_template_kr, resolve_username);
-      description = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template, resolve_username);
-      description_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template_kr, resolve_username);
+      description = desc_prepend + parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template, resolve_username);
+      description_kr = desc_prepend_kr + parse_feeds.template_parse(parse_feeds.feeds_toml.general.basic_description_template_kr, resolve_username);
       endtitle = parse_feeds.template_parse(parse_feeds.feeds_toml.general.timestamp_template, resolve_time);
       endtitle_kr = parse_feeds.template_parse(parse_feeds.feeds_toml.general.timestamp_template_kr, resolve_time);
     } catch (e) {
