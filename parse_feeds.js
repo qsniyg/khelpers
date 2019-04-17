@@ -1116,7 +1116,7 @@ function parse_member(obj, options) {
       else
         title_name += member.alt;
 
-      if (strip(grouptitle) !== strip(title_name)) {
+      if (strip(grouptitle_yt) !== strip(title_name)) {
         title += title_name;
         title_yt += title_name;
       }

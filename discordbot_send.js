@@ -96,6 +96,9 @@ function can_share(member, account) {
     return true;
   }
 
+  if (account.bot_whitelist === false)
+    return false;
+
 
   var properties = get_properties(account);
   if (properties) {

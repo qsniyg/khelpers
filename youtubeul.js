@@ -278,6 +278,28 @@ function upload_video_yt(options) {
       }*/
 
       req = youtube.videos.insert(base_request, function (err, data) {
+        console.log(data);
+
+        if (!err) {
+          try {
+            if (!data) {
+              err = "No response data";
+            } else if (!data.id) {
+              err = "No video ID in response";
+            } else if (data.kind !== "youtube#video") {
+              err = "Kind != 'youtube#video' (" + data.kind + ")";
+            } else if (!data.snippet) {
+              err = "No snippet in response";
+            } else if (!data.status) {
+              err = "No status in response";
+            } else if (data.status.uploadStatus !== "uploaded") {
+              err = "uploadStatus !== 'uploaded' (" + data.status.uploadStatus + ")";
+            }
+          } catch (e) {
+            err = "Error getting unknown error";
+          }
+        }
+
         if (err) {
           console.error('Error: ' + err);
 
@@ -288,7 +310,7 @@ function upload_video_yt(options) {
         } else {
           notifier.notify({
             title: "[YT] Live uploaded",
-            message: 'Live "' + options.title + '" has been uploaded to youtube'
+            message: 'Live "' + options.title + '" has been uploaded to youtube: ' + data.id
           });
         }
 
