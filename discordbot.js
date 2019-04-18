@@ -74,8 +74,8 @@ var msgs = {
     kr: "저 (개발자) 외국인이라 오역이 있으면 죄송합니다 알려주시면 감사하겠습니다"
   },
   subscribedto: {
-    en: "Subscribed to **%%1**",
-    kr: "**%%1** 구독합니다"
+    en: "Subscribed to **%%1** (%%2)",
+    kr: "**%%1** (%%2) 구독합니다"
   },
   alreadysubscribedto: {
     en: "Already subscribed to **%%1**",
@@ -1323,7 +1323,7 @@ function get_subscribe_name(lang, account) {
   return text;
 }
 
-function subscribed_msg(was_subscribed, account, show_help) {
+function subscribed_msg(was_subscribed, account, show_help, rule) {
   var help_en = "";
   var help_kr = "";
   if (show_help) {
@@ -1332,8 +1332,8 @@ function subscribed_msg(was_subscribed, account, show_help) {
   }
 
   if (!was_subscribed) {
-    return _("en", "subscribedto", get_subscribe_name("en", account)) + "\n" +
-      _("kr", "subscribedto", get_subscribe_name("kr", account)) + "\n\n" +
+    return _("en", "subscribedto", get_subscribe_name("en", account), rule_subscriptions_text("en", rule)) + "\n" +
+      _("kr", "subscribedto", get_subscribe_name("kr", account), rule_subscriptions_text("kr", rule)) + "\n\n" +
       help_en + "\n" + help_kr;
   } else {
     return _("en", "alreadysubscribedto", get_subscribe_name("en", account)) + "\n" +
@@ -1350,10 +1350,10 @@ async function subscribe_user(userid, account, replays) {
 
   if (output[1])
     //senddm(userid, "Subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
-    senddm(userid, subscribed_msg(false, account, true));
+    senddm(userid, subscribed_msg(false, account, true, options));
   else
     //senddm(userid, "Already subscribed to **" + get_subscribe_name(account) + "**" + dm_helptext);
-    senddm(userid, subscribed_msg(true, account, true));
+    senddm(userid, subscribed_msg(true, account, true, options));
 }
 
 async function subscribe_channel(message, guild, channel_id, account, replays, pings) {
@@ -1367,10 +1367,10 @@ async function subscribe_channel(message, guild, channel_id, account, replays, p
   if (message) {
     if (output[1])
       //message.reply("Subscribed to **" + get_subscribe_name(account) + "**");
-      message.reply(subscribed_msg(false, account, false));
+      message.reply(subscribed_msg(false, account, false, options));
     else
       //message.reply("Already subscribed to **" + get_subscribe_name(account) + "**");
-      message.reply(subscribed_msg(true, account, false));
+      message.reply(subscribed_msg(true, account, false, options));
   }
 }
 
