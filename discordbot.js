@@ -1156,7 +1156,9 @@ async function create_rule(options) {
   //     or:
   //   all: true
   //
-  //   replays: bool
+  //   replays: boolish
+  //
+  //   sub_{lives,replays,posts,stories}: bool
   //
   //   rule_id: rule_id
   // }
@@ -1507,22 +1509,29 @@ client.on('message', async message => {
       .replace(/[“”]/g, '"')
       .replace(/[‘’]/g, "'");
   var args = [];
+  var namedargs = new Map();
   var quote = null;
   for (var i = 0; i < 1000; i++) {
     if (!newmsg)
       break;
 
-    if (newmsg[0] === '"' ||
-        newmsg[0] === "'")
-      quote = newmsg[0];
-    else
-      quote = null;
+    quote = null;
+    for (var j = 0; j < newmsg.length; j++) {
+      if (newmsg[j].match(/[\s]/))
+        break;
+
+      if (newmsg[j] === '"' ||
+          newmsg[j] === "'") {
+        quote = newmsg[j];
+        break;
+      }
+    }
 
     var match;
     if (!quote)
       match = newmsg.match(/^([\S]*)\s*([\s\S]*)$/);
     else {
-      var regex = new RegExp("^" + quote + "(.*?)" + quote + "\\s*([\\s\\S]*)$");
+      var regex = new RegExp("^([^" + quote + "]*?)" + quote + "(.*?)" + quote + "\\s*([\\s\\S]*)$");
       match = newmsg.match(regex);
       if (!match) {
         //message.reply("Unterminated quote?");
@@ -1531,12 +1540,27 @@ client.on('message', async message => {
       }
     }
 
-    args.push(match[1]);
+    var arg;
+    if (quote) {
+      arg = match[1] + match[2];
+      newmsg = match[3];
+    } else {
+      arg = match[1];
+      newmsg = match[2];
+    }
 
-    newmsg = match[2];
+    if (arg.match(/^[a-z_]+=/)) {
+      var arg_name = arg.replace(/^(.*?)=.*/, "$1");
+      var arg_value = arg.replace(/^.*?=/, "");
+      namedargs.set(arg_name, arg_value);
+    }
+
+    args.push(arg);
   }
 
   console.log(args);
+  if (namedargs.size > 0)
+    console.log(namedargs);
   var command = args[0].toLowerCase();
 
   var youre = is_user ? "you are" : "your guild is";
@@ -1983,10 +2007,12 @@ client.on('raw', async function(event) {
             if (rules && rules.length > 0) {
               rules.forEach(rule => {
                 if (sent_message.type === "live") {
-                  if (rule.replays === true || rule.replays === false)
+                  //if (rule.replays === true || rule.replays === false)
+                  if (rule.sub_lives === true)
                     remove_rule(rule.rule_id, "emoji");
                 } else if (sent_message.type === "replay") {
-                  if (rule.replays === true || rule.replays === "only")
+                  //if (rule.replays === true || rule.replays === "only")
+                  if (rule.sub_replays === true)
                     remove_rule(rule.rule_id, "emoji");
                 }
               });
