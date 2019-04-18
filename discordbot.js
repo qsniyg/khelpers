@@ -10,16 +10,38 @@ var db_rules = db.get("rules");
 var db_messages = db.get("messages");
 var db_guilds = db.get("guilds");
 
-//db_stars.remove({});
-//db_accounts.remove({});
-//db_rules.remove({});
-//db_messages.remove({});
-//db_guilds.remove({});
-
 if (false) {
-  db_rules.find({}).then(
-    rules => {
-      console.log(rules);
+  var total_rules = 0;
+  var finished_rules = 0;
+  db_rules.find({}).each(
+    (rule, {close, pause, resume}) => {
+      total_rules++;
+      if (!("sub_lives" in rule)) {
+        var replays = rule.replays;
+        rule.sub_lives = false;
+        rule.sub_replays = false;
+        rule.sub_stories = false;
+        rule.sub_posts = false;
+        if (replays === false || replays === true) {
+          rule.sub_lives = true;
+        }
+
+        if (replays === "only" || replays === true) {
+          rule.sub_replays = true;
+        }
+        //console.log(rule);
+
+        db_rules.update(rule._id, rule).then(
+          function() {
+            finished_rules++;
+            console.log(finished_rules + "/" + total_rules);
+          },
+          function(err) {
+            console.log(err);
+          }
+        );
+      }
+      //console.log(rule);
     }
   );
 }
@@ -291,9 +313,9 @@ var msgs = {
     en: "No rules found",
     kr: "구독 없습니다"
   },
-  rules: {
+  rule_list: {
     en: "Rules",
-    kr: "구독"
+    kr: "구독 목록"
   },
   all_accounts: {
     en: "all accounts",
@@ -330,6 +352,14 @@ var msgs = {
   replays: {
     en: "replays",
     kr: "다시보기"
+  },
+  stories: {
+    en: "stories",
+    kr: "스토리"
+  },
+  posts: {
+    en: "posts",
+    kr: "게시물"
   },
   unsubscribed_from: {
     en: "Unsubscribed from **%%1**'s %%2",
@@ -1229,8 +1259,20 @@ function get_subscribed_users(account) {
 
 function base_rule(account, replays) {
   var options = {
-    replays: replays
+    replays: replays,
+    sub_lives: false,
+    sub_replays: false,
+    sub_stories: false,
+    sub_posts: false
   };
+
+  if (replays === false || replays === true) {
+    options.sub_lives = true;
+  }
+
+  if (replays === "only" || replays === true) {
+    options.sub_replays = true;
+  }
 
   if (account === "*") {
     options.all = true;
@@ -1753,7 +1795,7 @@ client.on('message', async message => {
       return message.reply(_(lang, "no_rules_found"));
     }
 
-    var message_text = "**" + _(lang, "rules") + "**\n\n";
+    var message_text = "**" + _(lang, "rule_list") + "**\n\n";
 
     for (var i = 0; i < rules.length; i++) {
       var rule = rules[i];
@@ -1819,13 +1861,34 @@ client.on('message', async message => {
         text += ping_text;
       }
 
-      if (rule.replays === true) {
+      /*if (rule.replays === true) {
         text += " (" + _(lang, "with_replays") + ")";
       } else if (rule.replays === "only") {
         text += " (" + _(lang, "only_replays") + ")";
       } else if (rule.replays === false) {
         text += " (" + _(lang, "no_replays") + ")";
+        }*/
+      text += " (";
+
+      var subbed_text = [];
+
+      if (rule.sub_lives) {
+        subbed_text.push(_(lang, "lives"));
       }
+
+      if (rule.sub_replays) {
+        subbed_text.push(_(lang, "replays"));
+      }
+
+      if (rule.sub_posts) {
+        subbed_text.push(_(lang, "posts"));
+      }
+
+      if (rule.sub_stories) {
+        subbed_text.push(_(lang, "stories"));
+      }
+
+      text += subbed_text.join(", ") + ")";
 
       message_text += text + "\n";
     }
