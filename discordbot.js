@@ -1374,6 +1374,28 @@ async function subscribe_channel(message, guild, channel_id, account, replays, p
   }
 }
 
+function rule_subscriptions_text(lang, rule) {
+  var subbed_text = [];
+
+  if (rule.sub_lives) {
+    subbed_text.push(_(lang, "lives"));
+  }
+
+  if (rule.sub_replays) {
+    subbed_text.push(_(lang, "replays"));
+  }
+
+  if (rule.sub_posts) {
+    subbed_text.push(_(lang, "posts"));
+  }
+
+  if (rule.sub_stories) {
+    subbed_text.push(_(lang, "stories"));
+  }
+
+  return subbed_text.join(", ");
+}
+
 function discord_invite_msg(lang, userid) {
   if (!bot_guild.members.get(userid)) {
     return _(lang, "discord_invite_msg", config.parsed.DISCORD_INVITE_LINK);
@@ -1894,25 +1916,9 @@ client.on('message', async message => {
         }*/
       text += " (";
 
-      var subbed_text = [];
+      text += rule_subscriptions_text(lang, rule);
 
-      if (rule.sub_lives) {
-        subbed_text.push(_(lang, "lives"));
-      }
-
-      if (rule.sub_replays) {
-        subbed_text.push(_(lang, "replays"));
-      }
-
-      if (rule.sub_posts) {
-        subbed_text.push(_(lang, "posts"));
-      }
-
-      if (rule.sub_stories) {
-        subbed_text.push(_(lang, "stories"));
-      }
-
-      text += subbed_text.join(", ") + ")";
+      text += ")";
 
       message_text += text + "\n";
     }
