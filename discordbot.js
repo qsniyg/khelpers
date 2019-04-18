@@ -390,6 +390,8 @@ var short_sites = {
   "goldlive": "GOLDL"
 };
 
+var currently_sending = {};
+
 function _(lang, id) {
   if (lang === "both") {
     var args = Array.from(arguments).slice(1);
@@ -2231,32 +2233,50 @@ async function send_message(body) {
         broadcast_guid: body.broadcast_guid
       };
 
-      if (rule.user) {
-        query.user = rule.user;
-        this_text += unsubscribe_msg;
-        let already_messaged = await db_messages.find(query);
-        if (already_messaged && already_messaged.length > 0) {
-          return await ensure_message_text(already_messaged, this_text);
+      var querystr = JSON.stringify(query);
+
+      if (typeof rule.rule_id === "number" &&
+          rule.rule_id in currently_sending &&
+          currently_sending[rule.rule_id] === querystr) {
+        console.log("Already sending:\n   " + querystr + "\nto:   \n" + JSON.stringify(rule));
+        return;
+      }
+
+      async function actually_send() {
+        if (rule.user) {
+          query.user = rule.user;
+          this_text += unsubscribe_msg;
+          let already_messaged = await db_messages.find(query);
+          if (already_messaged && already_messaged.length > 0) {
+            return await ensure_message_text(already_messaged, this_text);
+          }
+
+          console.log("Notifying user " + rule.user + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
+
+          let message = await senddm(rule.user, this_text, properties);
+          message.react(unsubscribe_emoji);
+        } else if (rule.guild && rule.channel) {
+          query.guild = rule.guild;
+          query.channel = rule.channel;
+          this_text += subscribe_msg;
+          let already_messaged = await db_messages.find(query);
+          if (already_messaged && already_messaged.length > 0) {
+            return await ensure_message_text(already_messaged, this_text);
+          }
+
+          console.log("Notifying channel " + rule.channel + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
+
+          let message = await send_channel(rule.guild, rule.channel, rule.ping_roles, this_text, properties);
+          await message.react(subscribe_emoji);
+          //await message.react(unsubscribe_emoji);
         }
+      }
 
-        console.log("Notifying user " + rule.user + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
-
-        let message = await senddm(rule.user, this_text, properties);
-        message.react(unsubscribe_emoji);
-      } else if (rule.guild && rule.channel) {
-        query.guild = rule.guild;
-        query.channel = rule.channel;
-        this_text += subscribe_msg;
-        let already_messaged = await db_messages.find(query);
-        if (already_messaged && already_messaged.length > 0) {
-          return await ensure_message_text(already_messaged, this_text);
-        }
-
-        console.log("Notifying channel " + rule.channel + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
-
-        let message = await send_channel(rule.guild, rule.channel, rule.ping_roles, this_text, properties);
-        await message.react(subscribe_emoji);
-        //await message.react(unsubscribe_emoji);
+      try {
+        currently_sending[rule.rule_id] = querystr;
+        await actually_send();
+      } finally {
+        delete currently_sending[rule.rule_id];
       }
     });
     return;

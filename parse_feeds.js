@@ -311,7 +311,10 @@ function is_mixed(text) {
 
 function get_last_firstname(text) {
   if (text.indexOf(" ") < 0) {
-    return [text[0], text.slice(1)];
+    if (has_hangul(text))
+      return [text[0], text.slice(1)];
+    else
+      return [null, text];
   } else {
     return [text.split(" ")[0], text.replace(/^[^ ]* +/, "")];
   }
@@ -326,13 +329,17 @@ function parse_name(text, obj) {
   if (!is_hangul(text.charCodeAt(0)))
     return parse_hangul(text, false, obj);
 
-  var lastname;
+  var lastname = null;
   var rest;
 
   var lastfirst = get_last_firstname(text);
-  lastname = parse_hangul(lastfirst[0], false, obj);
+  if (lastfirst[0] !== null)
+    lastname = parse_hangul(lastfirst[0], false, obj);
   //var lastname_force = parse_hangul(lastfirst[0], true, obj);
-  var user_lastname = get_user_roman(lastfirst[0], obj);
+  var user_lastname = null;
+
+  if (lastfirst[0] !== null)
+    user_lastname = get_user_roman(lastfirst[0], obj);
   rest = lastfirst[1];
   /*if (text.indexOf(" ") < 0) {
     lastname = parse_hangul(text[0], false, obj);
@@ -344,7 +351,7 @@ function parse_name(text, obj) {
 
   if (user_lastname) {
     lastname = user_lastname;
-  } else if (lastfirst[0].length === 1) {
+  } else if (lastfirst[0] !== null && lastfirst[0].length === 1) {
     if (text[0] === "김") {
       lastname = "Kim";
     } else if (text[0] === "이") {
@@ -387,12 +394,18 @@ function parse_name(text, obj) {
     var retval = [];
 
     nameval.forEach((firstname) => {
-      retval.push(lastname + " " + firstname);
+      if (lastname !== null)
+        retval.push(lastname + " " + firstname);
+      else
+        retval.push(firstname);
     });
 
     return retval;
   } else {
-    return lastname + " " + nameval;
+    if (lastname !== null)
+      return lastname + " " + nameval;
+    else
+      return nameval;
   }
   //var retval = lastname + " " + parse_hangul(rest, false, obj);
   //console.log(text);
