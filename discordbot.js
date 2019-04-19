@@ -1195,11 +1195,13 @@ async function get_rules_for_account(account, replay) {
   orquery1 = [];
 
   if (!replay) {
-    orquery1.push({replays: true});
-    orquery1.push({replays: false});
+    orquery1.push({sub_lives: true});
+    //orquery1.push({replays: true});
+    //orquery1.push({replays: false});
   } else {
-    orquery1.push({replays: true});
-    orquery1.push({replays: "only"});
+    orquery1.push({sub_replays: true});
+    //orquery1.push({replays: true});
+    //orquery1.push({replays: "only"});
   }
 
   var query = {
@@ -1261,20 +1263,29 @@ function get_subscribed_users(account) {
 
 function base_rule(account, replays) {
   var options = {
-    replays: replays,
+    //replays: replays,
     sub_lives: false,
     sub_replays: false,
     sub_stories: false,
     sub_posts: false
   };
 
-  if (replays === false || replays === true) {
+  /*if (replays === false || replays === true) {
     options.sub_lives = true;
   }
 
   if (replays === "only" || replays === true) {
     options.sub_replays = true;
-  }
+    }*/
+
+  if (replays.sub_lives)
+    options.sub_lives = true;
+  if (replays.sub_replays)
+    options.sub_replays = true;
+  if (replays.sub_stories)
+    options.sub_stories = true;
+  if (replays.sub_posts)
+    options.sub_posts = true;
 
   if (account === "*") {
     options.all = true;
@@ -1707,10 +1718,18 @@ client.on('message', async message => {
       );
     }
 
-    if (replays === "true")
+    var subscription_types = {};
+
+    if (replays === "true") {
       replays = true;
-    else if (replays === "false")
+      subscription_types.sub_replays = true;
+      subscription_types.sub_lives = true;
+    } else if (replays === "false") {
       replays = false;
+      subscription_types.sub_lives = true;
+    } else if (replays === "only") {
+      subscription_types.sub_replays = true;
+    }
 
     var channel_id = null;
     if (!is_user) {
@@ -1787,9 +1806,9 @@ client.on('message', async message => {
     }
 
     if (is_user) {
-      subscribe_user(message.author.id, star, replays);
+      subscribe_user(message.author.id, star, subscription_types);
     } else {
-      subscribe_channel(message, message.guild.id, channel_id, star, replays, pings);
+      subscribe_channel(message, message.guild.id, channel_id, star, subscription_types, pings);
     }
     break;
   case "unsubscribe":
@@ -2004,9 +2023,9 @@ client.on('raw', async function(event) {
           //console.log(account);
           if (event.d.emoji.name === subscribe_emoji) {
             if (sent_message.type === "live")
-              subscribe_user(event_user_id, star, false);
+              subscribe_user(event_user_id, star, {sub_lives: true});
             else if (sent_message.type === "replay")
-              subscribe_user(event_user_id, star, "only");
+              subscribe_user(event_user_id, star, {sub_replays: true});
             //console.log("sub");
           } else if (event.d.emoji.name === unsubscribe_emoji) {
             var rules = await get_rules_for_user_account(event_user_id, account);
