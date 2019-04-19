@@ -10,6 +10,8 @@ var db_rules = db.get("rules");
 var db_messages = db.get("messages");
 var db_guilds = db.get("guilds");
 
+// TODO: create indexes
+
 if (false) {
   var total_rules = 0;
   var finished_rules = 0;
@@ -1185,7 +1187,7 @@ function remove_rule(rule_id, source) {
   return db_rules.remove({rule_id: sanitize_id(rule_id)}, {multi: false});
 }
 
-async function get_rules_for_account(account, replay) {
+async function get_rules_for_account(account, type) {
   orquery = [
     {star_id: sanitize_id(account.star_id)},
     {account_id: sanitize_id(account.account_id)},
@@ -1194,14 +1196,21 @@ async function get_rules_for_account(account, replay) {
 
   orquery1 = [];
 
-  if (!replay) {
+  if (type === "live") {
     orquery1.push({sub_lives: true});
     //orquery1.push({replays: true});
     //orquery1.push({replays: false});
-  } else {
+  } else if (type === "replay") {
     orquery1.push({sub_replays: true});
     //orquery1.push({replays: true});
     //orquery1.push({replays: "only"});
+  } else if (type === "post") {
+    orquery1.push({sub_posts: true});
+  } else if (type === "story") {
+    orquery1.push({sub_stories: true});
+  } else {
+    console.log("Unsupported body.type: " + type);
+    return [];
   }
 
   var query = {
@@ -2266,12 +2275,12 @@ async function send_message(body) {
     }
 
     var account = await find_account(body);
-    var rules = await get_rules_for_account(account, body.type === "replay");
+    var rules = await get_rules_for_account(account, body.type);
 
     for (var coauthor of body.coauthors) {
       coauthor.site = body.site;
       let coauthor_account = await find_account(coauthor);
-      let coauthor_rules = await get_rules_for_account(coauthor_account, body.type === "replay");
+      let coauthor_rules = await get_rules_for_account(coauthor_account, body.type);
       for (const coauthor_rule of coauthor_rules) {
         var can_add = true;
         for (const rule of rules) {
