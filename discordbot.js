@@ -280,20 +280,20 @@ var msgs = {
     kr: "`그룹과멤버이름` 뒤앞에 따옴표를 잊었습니까? %%{help_for_more_info_upper}"
   },
   invalid_channel_id: {
-    en: "Invalid `channel_id` (make sure you copied the ID, not the name of the channel)",
-    kr: "`채널ID` 잘못되었습니다 (채널 이름 아니라 ID 입력하십시오)"
+    en: "Invalid channel_id: `%%1` (make sure you copied the ID, not the name of the channel)",
+    kr: "채널ID (`%%1`) 잘못되었습니다 (채널 이름 아니라 ID 입력하십시오)"
   },
   channel_id_not_exist: {
-    en: "The specified channel ID does not exist, or is not accessible by the bot",
-    kr: "지정된 채널 ID 존재하지 않습니다 또는 이 봇이 액세스할 수 없습니다"
+    en: "The specified channel ID (`%%1`) does not exist, or is not accessible by the bot",
+    kr: "지정된 채널 ID (`%%1`) 존재하지 않습니다 또는 이 봇이 액세스할 수 없습니다"
   },
   invalid_role_id: {
-    en: "Invalid `role_id` (make sure you copied the ID, not the name of the role)",
-    kr: "`역할ID` 잘못되었습니다 (역학 이름 아니라 ID 입력하십시오)"
+    en: "Invalid role_id: `%%1` (make sure you copied the ID, not the name of the role)",
+    kr: "역할ID (`%%1`) 잘못되었습니다 (역학 이름 아니라 ID 입력하십시오)"
   },
   role_does_not_exist: {
-    en: "The specified role ID does not exist",
-    kr: "지정된 역할 ID 존재하지 않습니다"
+    en: "The specified role ID (`%%1`) does not exist",
+    kr: "지정된 역할 ID (`%%1`) 존재하지 않습니다"
   },
   unable_to_find_account: {
     en: "Unable to find `%%1`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.",
@@ -304,16 +304,16 @@ var msgs = {
     kr: "`%%{list_command}` 입력하시면 `구독ID` 찾을 수 있습니다"
   },
   needs_rule_id: {
-    en: "Needs `rule_id` (%%{find_rule_id_help})",
-    kr: "`구독ID` 필요합니다 (%%{find_rule_id_help})"
+    en: "Needs rule_id (%%{find_rule_id_help})",
+    kr: "구독 ID 필요합니다 (%%{find_rule_id_help})"
   },
   invalid_rule_id: {
-    en: "Invalid `rule_id` (this should be a number, %%{find_rule_id_help})",
-    kr: "`구독ID` 잘못되었습니다 (숫자여야 합니다. %%{find_rule_id_help})"
+    en: "Invalid rule_id: `%%1` (this should be a number, %%{find_rule_id_help})",
+    kr: "구독 ID (`%%1`) 잘못되었습니다 (숫자여야 합니다. %%{find_rule_id_help})"
   },
   rule_does_not_exist: {
-    en: "Rule %%1 does not exist",
-    kr: "구독 ID %%1 존재하지 않습니다"
+    en: "Rule `%%1` does not exist",
+    kr: "구독 ID `%%1` 존재하지 않습니다"
   },
   no_rules_found: {
     en: "No rules found",
@@ -1453,17 +1453,18 @@ async function unsubscribe(message, ruleid) {
     var removed = await remove_rule(ruleid, "unsubscribe_func");
     if (message) {
       if (removed && removed.result.n > 0) {
-        message.reply(_("en", "removed_rule", ruleid) + "\n" +
-                      _("kr", "removed_rule", ruleid));
+        await message.reply(_("en", "removed_rule", ruleid) + "\n" +
+                            _("kr", "removed_rule", ruleid));
       } else {
-        message.reply(_("en", "rule_not_found", ruleid) + "\n" +
-                      _("kr", "rule_not_found", ruleid));
+        await message.reply(_("en", "rule_not_found", ruleid) + "\n" +
+                            _("kr", "rule_not_found", ruleid));
       }
     }
   } catch (e) {
+    console.log("Error removing rule: " + ruleid);
     console.error(e);
     if (message) {
-      message.reply("Unknown error removing rule **" + ruleid + "**");
+      await message.reply("Unknown error removing rule **" + ruleid + "**");
     }
   }
 }
@@ -1823,7 +1824,7 @@ client.on('message', async message => {
 
       if (!ok) {
         //return message.reply("Invalid `channel_id` (make sure you copied the ID, not the name of the channel)");
-        return message.reply(_(lang, "invalid_channel_id"));
+        return message.reply(_(lang, "invalid_channel_id", args[1]));
       }
 
       if (!message.guild) {
@@ -1832,7 +1833,7 @@ client.on('message', async message => {
 
       if (!message.guild.channels.get(channel_id)) {
         //return message.reply("Channel ID '" + channel_id + "' does not exist, or is not accessible by the bot");
-        return message.reply(_(lang, "channel_id_not_exist"));
+        return message.reply(_(lang, "channel_id_not_exist", channel_id));
       }
     }
 
@@ -1847,26 +1848,30 @@ client.on('message', async message => {
           ping = sanitize_id(args[4]);
           if (ping)
             ok = true;
-        } catch (e) {}
+        } catch (e) {
+        }
 
         if (!ok) {
           //return message.reply("Invalid `role_id`");
-          return message.reply(_(lang, "invalid_role_id"));
+          return message.reply(_(lang, "invalid_role_id", ping));
         }
       }
 
-      if (!message.guild) {
-        return message.reply("Not in a guild? You shouldn't see this");
-      }
+      if (ping) {
+        if (!message.guild) {
+          return message.reply("Not in a guild? You shouldn't see this");
+        }
 
-      if (!message.guild.roles.get(ping)) {
-        //return message.reply("Role ID '" + ping + "' does not exist");
-        return message.reply(_(lang, "role_does_not_exist"));
-      }
+        if (!message.guild.roles.get(ping)) {
+          //return message.reply("Role ID '" + ping + "' does not exist");
+          return message.reply(_(lang, "role_does_not_exist", ping));
+        }
 
-      pings.push(ping);
+        pings.push(ping);
+      }
     }
 
+    message.channel.startTyping();
     var star;
     if (star_search === "*") {
       star = star_search;
@@ -1882,11 +1887,13 @@ client.on('message', async message => {
           if (invite_msg)
             text += "\n\n" + invite_msg;
 
+          message.channel.stopTyping();
           return message.reply(text);
         }
       }
     }
 
+    message.channel.stopTyping();
     if (is_user) {
       subscribe_user(message.author.id, star, subscription_types);
     } else {
@@ -1899,35 +1906,48 @@ client.on('message', async message => {
       return message.reply(_(lang, "needs_rule_id"));
     }
 
-    var rule_id = args[1];
-    var ok = false;
-    try {
-      rule_id = sanitize_id(rule_id);
-      if (rule_id)
-        ok = true;
-    } catch(e) {
+    var rule_ids = [];
+    for (var i = 1; i < args.length; i++) {
+      var rule_id = args[i];
+      var ok = false;
+      try {
+        rule_id = sanitize_id(rule_id);
+        if (rule_id)
+          ok = true;
+      } catch(e) {
+      }
+
+      if (!ok) {
+        //return message.reply("Invalid `rule_id` (this should be a number, you can find subscribed rules using the `list` command)");
+        return message.reply(_(lang, "invalid_rule_id", rule_id));
+      }
+
+      if (rule_ids.indexOf(rule_id) < 0)
+        rule_ids.push(rule_id);
     }
 
-    if (!ok) {
-      //return message.reply("Invalid `rule_id` (this should be a number, you can find subscribed rules using the `list` command)");
-      return message.reply(_(lang, "invalid_rule_id"));
+    message.channel.startTyping();
+    for (const rule_id of rule_ids) {
+      var query = {rule_id: rule_id};
+
+      if (is_user) {
+        query.user = message.author.id;
+      } else {
+        query.guild = message.guild.id;
+      }
+
+      var rule = await db_rules.find(query);
+      if (!rule || rule.length === 0) {
+        //return message.reply("Rule " + rule_id + " does not exist");
+        message.channel.stopTyping();
+        return message.reply(_(lang, "rule_does_not_exist", rule_id));
+      }
     }
+    message.channel.stopTyping();
 
-    var query = {rule_id: rule_id};
-
-    if (is_user) {
-      query.user = message.author.id;
-    } else {
-      query.guild = message.guild.id;
+    for (const rule_id of rule_ids) {
+      await unsubscribe(message, rule_id);
     }
-
-    var rule = await db_rules.find(query);
-    if (!rule || rule.length === 0) {
-      //return message.reply("Rule " + rule_id + " does not exist");
-      return message.reply(_(lang, "rule_does_not_exist", rule_id));
-    }
-
-    unsubscribe(message, rule_id);
     break;
   case "list":
     var rules = [];
@@ -2073,6 +2093,11 @@ client.on('raw', async function(event) {
 
     var user = client.users.get(event_user_id);
     var channel = client.channels.get(event.d.channel_id) || await user.createDM();
+    if (!channel) {
+      console.log("Error fetching channel for event:");
+      console.log(event);
+      return;
+    }
     /*if (event.d.channel_id !== lives_channel_id) {
       return;
     }*/
@@ -2148,8 +2173,9 @@ client.on('raw', async function(event) {
         }
         //console.log(message);
       },
-      () => {
+      (err) => {
         console.error("Unable to fetch message: " + event.d.message_id);
+        console.log(err);
       }
     );
   }
