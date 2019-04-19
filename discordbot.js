@@ -194,7 +194,7 @@ var msgs = {
   ].join("\n"),
   subscribe_guild_args: {
     en: "channel_id group_and_member_name with_replays [ping_role_id]",
-    kr: "채널ID 그룹과멤버이름 다시보기포함 알림역할ID"
+    kr: "채널ID 그룹과멤버이름 다시보기포함 [알림역할ID]"
   },
   subscribe_guild_shorthelp: {
     en: "Subscribes a channel to a person's lives or replays",
@@ -270,6 +270,10 @@ var msgs = {
   invalid_with_replays: {
     en: "Invalid value for `with_replays`.",
     kr: "`다시보기포함` 잘못되었습니다."
+  },
+  invalid_tf: {
+    en: "Invalid value for `%%1`. Acceptable values are `true` or `false`.",
+    kr: "`%%1` 잘못되었습니다. 사용할 수 있는 값은 `true` (참), `false` (거짓)."
   },
   forget_quotes: {
     en: "Did you forget to add quotes around `group_and_member_name`? %%{help_for_more_info_upper}",
@@ -421,6 +425,26 @@ var short_sites = {
   "afreecatv": "ATV",
   "goldlive": "GOLDL"
 };
+
+const _subscribe_arg_aliases = {
+  "live":    "lives",
+  "lives":   "lives",
+  "라이브":   "lives",
+  "replay":  "replays",
+  "replays": "replays",
+  "다시보기": "replays",
+  "post":    "posts",
+  "posts":   "posts",
+  "게시물":   "posts",
+  "story":   "stories",
+  "stories": "stories",
+  "스토리":   "stories"
+};
+
+var subscribe_aliases = new Map();
+for (var key in _subscribe_arg_aliases) {
+  subscribe_aliases.set(key, _subscribe_arg_aliases[key]);
+}
 
 var currently_sending = {};
 
@@ -1497,6 +1521,28 @@ async function check_accepted_guild(guild) {
   return true;
 }
 
+function parse_truefalse(x) {
+  x = x.toLowerCase().replace(/[\s]/g, "");
+
+  if (x === "true" ||
+      x === "yes" ||
+      x === "참" ||
+      x === "예" ||
+      x === "네") {
+    return true;
+  }
+
+  if (x === "false" ||
+      x === "no" ||
+      x === "거짓" ||
+      x === "아니" ||
+      x === "아니오" ||
+      x === "아니요")
+    return false;
+
+  return null;
+}
+
 client.on('guildCreate', guild => {
   check_accepted_guild(guild);
   set_guilds_activity();
@@ -1702,7 +1748,7 @@ client.on('message', async message => {
     message.reply(reply);
     break;
   case "subscribe":
-    arglength = is_user ? 3 : 4;
+    arglength = is_user ? 2 : 3;
     if (args.length < arglength) {
       //return message.reply("Needs at least " + arglength + " arguments (use the `help` command for more information)");
       return message.reply(_(lang, "at_least_n_arguments", arglength));
@@ -1710,34 +1756,59 @@ client.on('message', async message => {
 
     var star_search = is_user ? args[1] : args[2];
     var replays = is_user ? args[2] : args[3];
-
-    if (replays !== "true" &&
-        replays !== "false" &&
-        replays !== "only") {
-      //var memberhelp = " (use the `help` command for more information)";
-      var memberhelp = _(lang, "help_for_more_info_upper");
-      if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
-        //memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
-        memberhelp = _(lang, "forget_quotes");
-      }
-
-      //return message.reply("The `with_replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
-      return message.reply(
-        _(lang, "invalid_with_replays") + " " + memberhelp + "\n\n" + _(lang, "replays_help")
-      );
-    }
+    var ping_role_id = is_user ? null : args[4];
 
     var subscription_types = {};
 
-    if (replays === "true") {
-      replays = true;
-      subscription_types.sub_replays = true;
+    // For cases where the ping role is specified, but replays isn't
+    if (!is_user && replays) {
+      try {
+        ping_role_id = sanitize_id(replays);
+        replays = null;
+      } catch (e) {
+      }
+    }
+
+    if (!replays) {
       subscription_types.sub_lives = true;
-    } else if (replays === "false") {
-      replays = false;
-      subscription_types.sub_lives = true;
-    } else if (replays === "only") {
       subscription_types.sub_replays = true;
+    } else {
+      var badreplay = null;
+      if (replays === "true") {
+        replays = true;
+        subscription_types.sub_replays = true;
+        subscription_types.sub_lives = true;
+      } else if (replays === "false") {
+        replays = false;
+        subscription_types.sub_lives = true;
+      } else if (replays === "only") {
+        subscription_types.sub_replays = true;
+      } else {
+        var splitted_replays = replays.split(/[,.+/\s]/);
+        for (var stype of splitted_replays) {
+          stype = subscribe_aliases.get(stype.toLowerCase());
+          if (!stype) {
+            badreplay = true;
+            break;
+          }
+
+          subscription_types["sub_" + stype] = true;
+        }
+      }
+
+      if (badreplay) {
+        //var memberhelp = " (use the `help` command for more information)";
+        var memberhelp = _(lang, "help_for_more_info_upper");
+        if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
+          //memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
+          memberhelp = _(lang, "forget_quotes");
+        }
+
+        //return message.reply("The `with_replays` argument needs to be one of `true`, `false`, or `only`" + memberhelp);
+        return message.reply(
+          _(lang, "invalid_with_replays") + " " + memberhelp + "\n\n" + _(lang, "replays_help")
+        );
+      }
     }
 
     var channel_id = null;
@@ -1767,9 +1838,11 @@ client.on('message', async message => {
 
     var pings = [];
     if (!is_user) {
-      if (args.length > 4 && args[4]) {
+      var ping = null;
+      if (ping_role_id) {
+        ping = ping_role_id;
+      } else if (args.length > 4 && args[4]) {
         var ok = false;
-        var ping = null;
         try {
           ping = sanitize_id(args[4]);
           if (ping)
@@ -1780,18 +1853,18 @@ client.on('message', async message => {
           //return message.reply("Invalid `role_id`");
           return message.reply(_(lang, "invalid_role_id"));
         }
-
-        if (!message.guild) {
-          return message.reply("Not in a guild? You shouldn't see this");
-        }
-
-        if (!message.guild.roles.get(ping)) {
-          //return message.reply("Role ID '" + ping + "' does not exist");
-          return message.reply(_(lang, "role_does_not_exist"));
-        }
-
-        pings.push(ping);
       }
+
+      if (!message.guild) {
+        return message.reply("Not in a guild? You shouldn't see this");
+      }
+
+      if (!message.guild.roles.get(ping)) {
+        //return message.reply("Role ID '" + ping + "' does not exist");
+        return message.reply(_(lang, "role_does_not_exist"));
+      }
+
+      pings.push(ping);
     }
 
     var star;
@@ -1803,7 +1876,7 @@ client.on('message', async message => {
         star = await find_star({username: star_search, site: "instagram"});
         if (!star) {
           //var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
-          var text = _(lang, "unable_to_find_account", star_search);
+          let text = _(lang, "unable_to_find_account", star_search);
 
           var invite_msg = discord_invite_msg(lang, message.author.id);
           if (invite_msg)
@@ -2175,12 +2248,14 @@ async function set_status(body) {
     current_watching_change_date = Date.now() + current_watching_change_time;
   }
 
+  if (current_watching.length === 0) {
+    current_watching_id = 0;
+    return;
+  }
+
   current_watching_id = current_watching_id % current_watching.length;
   if (isNaN(current_watching_id))
     current_watching_id = 0;
-
-  if (current_watching.length === 0)
-    return;
 
   try {
     var current = current_watching[current_watching_id];
@@ -2424,7 +2499,7 @@ async function send_message(body) {
       );
     });
   }
-};
+}
 
 fastify.post('/add', async (request, reply) => {
   try {
