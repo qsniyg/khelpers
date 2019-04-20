@@ -88,6 +88,9 @@ function can_share(member, account) {
   if (!member || member.family)
     return false;
 
+  if (member.member_name && member.member_name.startsWith("@"))
+    return false;
+
   if (account.site !== "instagram")
     return true;
 
@@ -357,6 +360,12 @@ function process_lives(parsed) {
   start_add(lives);
 }
 
+function cleanigurl(igurl) {
+  return igurl
+    .replace(/&ig_cache_key=[^&]*/, "")
+    .replace(/&se=[^&]*/, "");
+}
+
 function process_entries(parsed) {
   var entries = [];
   for (var i = 0; i < parsed.entries.length; i++) {
@@ -405,8 +414,8 @@ function process_entries(parsed) {
         for (var j = 0; j < entry.images.length; j++) {
           embedded_media.push({
             type: "image",
-            url: entry.images[j],
-            thumbnail: entry.images[j]
+            url: cleanigurl(entry.images[j]),
+            thumbnail: cleanigurl(entry.images[j])
           });
         }
       }
@@ -415,8 +424,8 @@ function process_entries(parsed) {
         for (var j = 0; j < entry.videos.length; j++) {
           embedded_media.push({
             type: "video",
-            url: entry.videos[j].video,
-            thumbnail: entry.videos[j].image
+            url: cleanigurl(entry.videos[j].video),
+            thumbnail: cleanigurl(entry.videos[j].image)
           });
         }
       }
