@@ -113,7 +113,7 @@ var msgs = {
   },
   replays_help: {
     en: [
-      "The `subscription_type` is an optional comma-separated argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
+      "`subscription_type` is an optional comma-separated argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
       "Possible values:",
       "",
       "    * `lives`        - Subscribes to livestreams",
