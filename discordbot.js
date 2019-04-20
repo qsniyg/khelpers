@@ -113,23 +113,25 @@ var msgs = {
   },
   replays_help: {
     en: [
-      "The `with_replays` argument determines whether or not replays are included. Possible values:",
+      "The `subscription_type` is an optional comma-separated argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
+      "Possible values:",
       "",
-      "    * `true`  - Subscribes to both livestreams and replays",
-      "    * `false` - Only subscribes to livestreams",
-      "    * `only`  - Only subscribes to replays"
+      "    * `lives`        - Subscribes to livestreams",
+      "    * `replays`   - Subscribes to replays",
+      "    * `stories`   - Subscribes to stories",
+      "",
     ].join("\n"),
     kr: [
-      "`다시보기포함` 속성에 가능한 값은",
+      "`구독종류`은 쉼표로 구분된 선택적인 속성입니다. 지정되지 않으면 값은 `라이브,다시보기` 일겁니다. 가능한 값은",
       "",
-      "    * `true`  - 라이브이랑 다시보기를 구독하기",
-      "    * `false` - 라이브만 구독하기",
-      "    * `only`  - 다시보기만 구독하기"
+      "    * `라이브`       - 라이브 구독하기",
+      "    * `다시보기`   - 다시보기 구독하기",
+      "    * `스토리`       - 스토리 구독하기"
     ].join("\n")
   },
-  replays_needs_values: {
-    en: "The `with_replays` argument needs to be one of `true`, `false`, or `only`",
-    kr: "`다시보기포함` 속성에 가능한 값은 `true`, `false`, `only`입니다"
+  replays_needs_values: { // unused
+    en: "The `subscription_type` argument needs to be one of `true`, `false`, or `only`",
+    kr: "`구독종류` 속성에 가능한 값은 `true`, `false`, `only`입니다"
   },
   help_shorthelp: {
     en: "This message",
@@ -147,20 +149,20 @@ var msgs = {
     kr: "목록"
   },
   list_you_help: {
-    en: "Lists the lives you're currently subscribed to",
+    en: "Lists your current subscriptions",
     kr: "구독 표시하기"
   },
   list_server_help: {
-    en: "Lists the lives your server is currently subscribed to",
+    en: "Lists the server's current subscriptions",
     kr: "구독 표시하기"
   },
   subscribe_you_shorthelp: {
-    en: "Subscribes yourself to a person's lives or replays",
-    kr: "라이브 또는 다시보기를 구독하기"
+    en: "Subscribes yourself to a person's lives, replays, or stories",
+    kr: "라이브나 다시보기나 스토리를 구독하기"
   },
   subscribe_you_args: {
-    en: "group_and_member_name with_replays",
-    kr: "그룹과멤버이름 다시보기포함"
+    en: "group_and_member_name subscription_type",
+    kr: "그룹과멤버이름 구독종류"
   },
   subscribe_command: {
     en: "subscribe",
@@ -169,18 +171,18 @@ var msgs = {
   subscribe_you_examples: [
     "%%{examples}",
     "",
-    "       `%%{subscribe_command} 'snsd taeyeon' true`",
-    "       `%%{subscribe_command} \"girl's generation taeyeon\" true`",
-    "       `%%{subscribe_command} \"Girls Generation Taeyeon\" true`",
-    "       `%%{subscribe_command} '소녀시대 태연' true`",
+    "       `%%{subscribe_command} 'snsd taeyeon'`",
+    "       `%%{subscribe_command} \"girl's generation taeyeon\" %%{lives},%%{replays}`",
+    "       `%%{subscribe_command} \"Girls Generation Taeyeon\" %%{replays}`",
+    "       `%%{subscribe_command} '소녀시대 태연' %%{lives},%%{replays},%%{stories}`",
   ].join("\n"),
   group_membername_help: {
     en: "`group_and_member_name` needs to be quoted, but spacing, punctuation, and casing is ignored.",
     kr: "`그룹과멤버이름`에 여러 단어가 포함된 경우에는 단어 앞뒤에 따옴표를 사용하십시오. 공백과 글점 무시됩니다",
   },
   subscribe_username_ok_help: {
-    en: "You can also subscribe by their username (for example: `%%{subscribe_command} 'taeyeon_ss' true`), however, this is still limited to the accounts available in the bot's database.",
-    kr: "인스타 아이디로 구독해도 되는데 (예를 들어서 `%%{subscribe_command} 'taeyeon_ss' true`), 봇의 DB에 없는 계정을 구독할 수 없습니다."
+    en: "You can also subscribe by their username (for example: `%%{subscribe_command} 'taeyeon_ss'`), however, this is still limited to the accounts available in the bot's database.",
+    kr: "인스타 아이디로 구독해도 되는데 (예를 들어서 `%%{subscribe_command} 'taeyeon_ss'`), 봇의 DB에 없는 계정을 구독할 수 없습니다."
   },
   examples: {
     en: "Examples:",
@@ -196,8 +198,8 @@ var msgs = {
     "%%{subscribe_username_ok_help}"
   ].join("\n"),
   subscribe_guild_args: {
-    en: "channel_id group_and_member_name with_replays [ping_role_id]",
-    kr: "채널ID 그룹과멤버이름 다시보기포함 [알림역할ID]"
+    en: "channel_id group_and_member_name subscription_type [ping_role_id]",
+    kr: "채널ID 그룹과멤버이름 구독종류 [알림역할ID]"
   },
   subscribe_guild_shorthelp: {
     en: "Subscribes a channel to a person's lives or replays",
@@ -206,10 +208,10 @@ var msgs = {
   subscribe_guild_examples: [
     "%%{examples}",
     "",
-    "       `%%{subscribe_command} 123456 'snsd taeyeon' true 7890`",
-    "       `%%{subscribe_command} 123456 \"girl's generation taeyeon\" true`",
-    "       `%%{subscribe_command} 123456 \"Girls Generation Taeyeon\" true 7890`",
-    "       `%%{subscribe_command} 123456 '소녀시대 태연' true`"
+    "       `%%{subscribe_command} 123456 'snsd taeyeon' 7890`",
+    "       `%%{subscribe_command} 123456 \"girl's generation taeyeon\" %%{lives},%%{replays}`",
+    "       `%%{subscribe_command} 123456 \"Girls Generation Taeyeon\" %%{replays} 7890`",
+    "       `%%{subscribe_command} 123456 '소녀시대 태연' %%{lives},%%{replays},%%{stories}`"
   ].join("\n"),
   find_channelid: {
     en: "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'.",
@@ -271,8 +273,8 @@ var msgs = {
     kr: "속성이 최소한 %%1개 필요합니다 (%%{help_for_more_info})"
   },
   invalid_with_replays: {
-    en: "Invalid value for `with_replays`.",
-    kr: "`다시보기포함` 잘못되었습니다."
+    en: "Invalid value for `subscription_type`.",
+    kr: "`구독종류` 잘못되었습니다."
   },
   invalid_tf: {
     en: "Invalid value for `%%1`. Acceptable values are `true` or `false`.",
@@ -823,7 +825,7 @@ function get_star_accounts(starid) {
 
 function strip_search(search) {
   return search.toLowerCase()
-    .replace(/[-_'".,!/\s]/g, "")
+    .replace(/[-_'"“”‘’.,!/\s]/g, "")
     .replace(/^\$+/, "");
 }
 
