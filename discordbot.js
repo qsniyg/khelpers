@@ -2504,7 +2504,7 @@ async function send_message(body) {
       rich_msg = {
         embed: {
           url: link,
-          title: "@" + body.username,
+          title: "@" + body.username.replace(/_/g, "\\_"),
           //description: message_text_en + "\n" + message_text_kr,
         }
       };
