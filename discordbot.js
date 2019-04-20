@@ -411,6 +411,14 @@ var msgs = {
     kr: "**%%1** %%2에서 하셨던 라이브 다시보기"
   },
   ft: "ft. **%%1**",
+  added_video_story: {
+    en: "**%%1** added a video to their story",
+    kr: "**%%1** 스토리에 영상을 추가했습니다"
+  },
+  added_image_story: {
+    en: "**%%1** added a photo to their story",
+    kr: "**%%1** 스토리에 사진을 추가했습니다"
+  },
   emoji_subscribe: {
     en: "Use " + subscribe_emoji + " to subscribe to future %%1 by this person",
     kr: subscribe_emoji + " 클릭하시면 이 분의 %%1를 앞으로 알려줄 것입니다"
@@ -597,17 +605,18 @@ function init_message(properties, text, message) {
     properties = {type: "other"};
 
   properties.created_at = Date.now();
-  properties.text = text;
+  if (typeof text === "string")
+    properties.text = text;
   properties.messageid = message.id;
 
   return properties;
 }
 
-function senddm(userid, text, properties) {
+function senddm(userid, text, properties, message_options) {
   return new Promise((resolve, reject) => {
     client.fetchUser(userid).then(
       user => {
-        user.send(text).then(
+        user.send(text, message_options).then(
           message => {
             properties = init_message(properties, text, message);
             properties.user = userid;
@@ -640,7 +649,7 @@ function senddm(userid, text, properties) {
   });
 }
 
-async function send_channel(guildid, channelid, pings, text, properties) {
+async function send_channel(guildid, channelid, pings, text, properties, message_options) {
   var guild = client.guilds.get(guildid);
   if (!guild) {
     return null;
@@ -651,7 +660,7 @@ async function send_channel(guildid, channelid, pings, text, properties) {
     return null;
   }
 
-  var message = await channel.send(text);
+  var message = await channel.send(text, message_options);
   properties = init_message(properties, text, message);
   properties.guild = guildid;
   properties.channel = channelid;
@@ -992,7 +1001,7 @@ function getRandomArbitrary(min, max) {
 
 function create_id(db, key) {
   var id = sanitize_id(getRandomArbitrary(1, 10*1000*1000));
-  console.log("Trying id ", id);
+  console.log("Trying id (" + key + ") ", id);
 
   var query = {};
   query[key] = id;
@@ -2331,7 +2340,8 @@ async function send_message(body) {
     body.coauthors = [];
 
   if (body.type === "live" ||
-      body.type === "replay") {
+      body.type === "replay" ||
+      body.type === "story") {
     var noupload_msg_en = "";
     var noupload_msg_kr = "";
     if (true && body.site === "instagram") {
@@ -2342,7 +2352,7 @@ async function send_message(body) {
       }
     }
 
-    var message_text, subscribe_msg, unsubscribe_msg;
+    var message_text, subscribe_msg, unsubscribe_msg, rich_msg;
 
     if (body.type === "live") {
       //message_text = "**" + body.name + "** is live on " + sitename + noupload_msg + "\n" + body.watch_link + "\n\n";
@@ -2376,6 +2386,34 @@ async function send_message(body) {
       unsubscribe_msg =
         _("en", "emoji_unsubscribe", _("en", "replays")) + "\n" +
         _("kr", "emoji_unsubscribe", _("kr", "replays"));
+    } else if (body.type === "story") {
+      if  (!body.embedded_media || body.embedded_media.length == 0) {
+        console.log("Warning: no embedded media");
+        console.log(body);
+        return;
+      }
+
+      var media = body.embedded_media[0];
+      var msgtype = "added_image_story";
+      var link = media.image;
+      if (media.type === "video") {
+        msgtype = "added_video_story";
+        link = media.video;
+      }
+
+      let message_text_en = _("en", msgtype, body.name);
+      let message_text_kr = _("kr", msgtype, body.name_kr);
+
+      message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.watch_link;
+
+      rich_msg = {
+        url: link,
+        title: "@" + body.username,
+        description: message_text_en + "\n" + message_text_kr,
+        image: {
+          url: media.thumbnail
+        }
+      };
     }
 
     var account = await find_account(body);
@@ -2446,6 +2484,11 @@ async function send_message(body) {
         rule.ping_roles = [];
       }
 
+      var add_emojis = true;
+      if (rich_msg) {
+        add_emojis = false;
+      }
+
       var properties = {
         type: body.type,
         account: account.account_id,
@@ -2472,7 +2515,8 @@ async function send_message(body) {
       async function actually_send() {
         if (rule.user) {
           query.user = rule.user;
-          this_text += unsubscribe_msg;
+          if (add_emojis && !rich_msg)
+            this_text += unsubscribe_msg;
           let already_messaged = await db_messages.find(query);
           if (already_messaged && already_messaged.length > 0) {
             return await ensure_message_text(already_messaged, this_text);
@@ -2480,12 +2524,14 @@ async function send_message(body) {
 
           console.log("Notifying user " + rule.user + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
-          let message = await senddm(rule.user, this_text, properties);
-          message.react(unsubscribe_emoji);
+          let message = await senddm(rule.user, this_text, properties, rich_msg);
+          if (add_emojis)
+            message.react(unsubscribe_emoji);
         } else if (rule.guild && rule.channel) {
           query.guild = rule.guild;
           query.channel = rule.channel;
-          this_text += subscribe_msg;
+          if (add_emojis && !rich_msg)
+            this_text += subscribe_msg;
           let already_messaged = await db_messages.find(query);
           if (already_messaged && already_messaged.length > 0) {
             return await ensure_message_text(already_messaged, this_text);
@@ -2493,9 +2539,11 @@ async function send_message(body) {
 
           console.log("Notifying channel " + rule.channel + " of " + body.type + ": " + body.name + " (" + body.broadcast_guid + ")");
 
-          let message = await send_channel(rule.guild, rule.channel, rule.ping_roles, this_text, properties);
-          await message.react(subscribe_emoji);
-          //await message.react(unsubscribe_emoji);
+          let message = await send_channel(rule.guild, rule.channel, rule.ping_roles, this_text, properties, rich_msg);
+          if (add_emojis) {
+            await message.react(subscribe_emoji);
+            //await message.react(unsubscribe_emoji);
+          }
         }
       }
 
@@ -2654,6 +2702,9 @@ async function do_delete(body) {
 }
 
 async function ensure_message_text(messages, text) {
+  if (typeof text !== "string")
+    return;
+
   for (var i = 0; i < messages.length; i++) {
     var message = messages[i];
 

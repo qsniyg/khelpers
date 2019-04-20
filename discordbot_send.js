@@ -246,6 +246,10 @@ function new_main(members, options) {
     result.video_title = options.video_title;
   }
 
+  if (options.embedded_media) {
+    result.embedded_media = options.embedded_media;
+  }
+
   if (member.alt_groups) {
     result.alt_groups = member.alt_groups;
   }
@@ -373,11 +377,37 @@ function process_entries(parsed) {
     if (type === "post") // for now
       continue;
 
+    var embedded_media = undefined;
+    if (type !== "live") {
+      embedded_media = [];
+
+      if (entry.images) {
+        for (var j = 0; j < entry.images.length; j++) {
+          embedded_media.push({
+            type: "image",
+            url: entry.images[j],
+            thumbnail: entry.images[j]
+          });
+        }
+      }
+
+      if (entry.videos) {
+        for (var j = 0; j < entry.videos.length; j++) {
+          embedded_media.push({
+            type: "video",
+            url: entry.videos[j].video,
+            thumbnail: entry.videos[j].image
+          });
+        }
+      }
+    }
+
     entries.push({
       type,
       guid,
       site: "instagram",
       watch_link,
+      embedded_media,
       username: entry.author,
       coauthors: entry.coauthors,
       time: entry.date * 1000
