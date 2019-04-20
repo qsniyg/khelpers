@@ -999,9 +999,12 @@ function getRandomArbitrary(min, max) {
   return (Math.random() * (max - min) + min) >> 0;
 }
 
-function create_id(db, key) {
+function create_id(db, key, retrying) {
   var id = sanitize_id(getRandomArbitrary(1, 10*1000*1000));
-  console.log("Trying id (" + key + ") ", id);
+  var text = "Trying id (" + key + ") ";
+  if (retrying)
+    text += "(retrying) ";
+  console.log(text, id);
 
   var query = {};
   query[key] = id;
@@ -1010,7 +1013,7 @@ function create_id(db, key) {
     db.find(query).then(
       star => {
         if (star && star.length > 0) {
-          create_id().then(
+          create_id(db, key, true).then(
             id => {
               resolve(id);
             },
@@ -1133,7 +1136,96 @@ function update_star(star, properties) {
   });
 }
 
+var waiting_accounts = [];
+
+function get_account_in_waiting(properties) {
+  var found_i = null;
+  for (var i = 0; i < waiting_accounts.length; i++) {
+    if (waiting_accounts[i].site !== properties.site)
+      continue;
+
+    if (waiting_accounts[i].username && properties.username &&
+        waiting_accounts[i].username.toLowerCase() === properties.username.toLowerCase()) {
+      found_i = i;
+      break;
+    }
+
+    if (waiting_accounts[i].uid && properties.uid &&
+        waiting_accounts[i].uid === properties.uid) {
+      found_i = i;
+      break;
+    }
+  }
+
+  return found_i;
+}
+
 async function add_account(properties) {
+  //return await add_account_real(properties);
+  var found_i = get_account_in_waiting(properties);
+
+  if (found_i !== null) {
+    if (!waiting_accounts[found_i].callbacks)
+      waiting_accounts[found_i].callbacks = [];
+
+    var account_ac = waiting_accounts[found_i];
+    //console.log("Adding account to waiting queue:");
+    //console.log(account_ac);
+
+    return new Promise((resolve, reject) => {
+      account_ac.callbacks.push(function() {
+        //console.log("Finished queue for one instance");
+        add_account_wrapper(properties, account_ac).then(
+          (data) => { resolve(data); },
+          (data) => { reject(data); }
+        );
+      });
+    });
+  } else {
+    //console.log("Adding account:");
+    //console.log(properties);
+    waiting_accounts.push(JSON.parse(JSON.stringify(properties)));
+    var account_ac = waiting_accounts[waiting_accounts.length - 1];
+    return await add_account_wrapper(properties, account_ac);
+  }
+}
+
+async function add_account_wrapper(properties, account_ac) {
+  var retval;
+  var orig_properties = JSON.parse(JSON.stringify(properties));
+  try {
+    retval = await add_account_real(properties);
+  } catch (e) {
+    console.error(e);
+    //retval = e;
+  } finally {
+    var found_i = waiting_accounts.indexOf(account_ac);//get_account_in_waiting(orig_properties);
+    if (found_i !== null && found_i >= 0) {
+      //var account_ac = waiting_accounts[found_i];
+      if (account_ac && account_ac.callbacks && account_ac.callbacks.length > 0) {
+        var callback = account_ac.callbacks[0];
+        account_ac.callbacks.shift();
+        try {
+          callback();
+        } catch (e) {
+          console.error(e);
+          if (account_ac.callbacks.length > 0) {
+            found_i = get_account_in_waiting(orig_properties);
+            //console.log("(Error) Killing waiting list for: " + found_i + " (" + waiting_accounts.length + ")");
+            waiting_accounts.splice(found_i, 1);
+          }
+        }
+      } else {
+        //console.log("Killing waiting list for: " + found_i + " (" + waiting_accounts.length + ")");
+        waiting_accounts.splice(found_i, 1);
+      }
+    }
+
+    return retval;
+  }
+}
+
+async function add_account_real(properties) {
   var star = await find_star(properties);
 
   if (star) {
@@ -1176,7 +1268,7 @@ async function add_account(properties) {
     };
 
     await update_star(star, properties);
-    var account = await add_account(properties);
+    var account = await add_account_real(properties);
     return account;
   }
 }
@@ -2395,25 +2487,35 @@ async function send_message(body) {
 
       var media = body.embedded_media[0];
       var msgtype = "added_image_story";
-      var link = media.image;
+      var link = media.url;
       if (media.type === "video") {
         msgtype = "added_video_story";
-        link = media.video;
       }
+      var text_link = body.watch_link;
+      text_link = link;
 
       let message_text_en = _("en", msgtype, body.name);
       let message_text_kr = _("kr", msgtype, body.name_kr);
 
-      message_text = message_text_en + "\n" + message_text_kr + "\n\n" + body.watch_link;
+      message_text = message_text_en + "\n" + message_text_kr + "\n\n" + text_link;
 
       rich_msg = {
-        url: link,
-        title: "@" + body.username,
-        description: message_text_en + "\n" + message_text_kr,
-        image: {
-          url: media.thumbnail
+        embed: {
+          url: link,
+          title: "@" + body.username,
+          //description: message_text_en + "\n" + message_text_kr,
         }
       };
+
+      if (media.type === "video") {
+        rich_msg.embed.thumbnail = {
+          url: media.thumbnail
+        };
+      } else {
+        rich_msg.embed.image = {
+          url: media.url
+        };
+      }
     }
 
     var account = await find_account(body);
@@ -2580,7 +2682,6 @@ async function send_message(body) {
 
 fastify.post('/add', async (request, reply) => {
   try {
-
     //console.log(request.body);
     await add_account(request.body);
     if (request.body.coauthors) {

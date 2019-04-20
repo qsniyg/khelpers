@@ -286,8 +286,28 @@ function start_add(items) {
   if (!items || items.length === 0)
     return;
 
+  var new_items = [];
+  for (var i = 0; i < items.length; i++) {
+    var found = false;
+    for (var j = 0; j < new_items.length; j++) {
+      if (items[i].site && new_items[j].site &&
+          items[i].site !== new_items[j].site)
+        continue;
+
+      if (items[i].guid && new_items[j].guid &&
+          items[i].guid !== new_items[j].guid)
+        continue;
+
+      found = true;
+      break;
+    }
+
+    if (!found)
+      new_items.push(items[i]);
+  }
+
   init_main((members) => {
-    do_main_loop(members, items);
+    do_main_loop(members, new_items);
   });
 }
 
