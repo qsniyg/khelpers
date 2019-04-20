@@ -279,7 +279,7 @@ function do_main_loop(members, items) {
 }
 
 function start_add(items) {
-  if (items.length === 0)
+  if (!items || items.length === 0)
     return;
 
   init_main((members) => {
@@ -331,6 +331,60 @@ function process_lives(parsed) {
   }
 
   start_add(lives);
+}
+
+function process_entries(parsed) {
+  var entries = [];
+  for (var i = 0; i < parsed.entries.length; i++) {
+    var entry = parsed.entries[i];
+    var type = "post";
+    var watch_link = entry.url;
+
+    if (entry.caption) {
+      if (entry.caption === "[LIVE]" ||
+          entry.caption.startsWith("[LIVE] ")) {
+        type = "live";
+        watch_link = undefined;
+      } else if (entry.caption === "[STORY]" ||
+                 entry.caption.startsWith("[STORY] ")) {
+        type = "story";
+      }
+    }
+
+    // shouldn't happen
+    if (watch_link && watch_link.match(/^https?:\/\/guid\.instagram\.com\//))
+      continue;
+
+    var guid;
+    if (type === "live") {
+      guid = entry.url.match(/^https?:\/\/guid\.instagram\.com\/([0-9]+_[0-9]+)$/);
+      if (guid)
+        guid = guid[1];
+      else
+        continue;
+    } else {
+      guid = entry.url.match(/^https?:\/\/(?:www\.)?instagram\.com(\/p\/[^/]*)(?:\/*)?(?:[?#].*?)?$/);
+      if (guid)
+        guid = guid[1];
+      else
+        continue;
+    }
+
+    if (type === "post") // for now
+      continue;
+
+    entries.push({
+      type,
+      guid,
+      site: "instagram",
+      watch_link,
+      username: entry.author,
+      coauthors: entry.coauthors,
+      time: entry.date * 1000
+    });
+  }
+
+  start_add(entries);
 }
 
 function process_replays(parsed) {
@@ -518,6 +572,10 @@ function start() {
     parsed = JSON.parse(input);
   } catch (e) {
     return;
+  }
+
+  if (parsed.url === "https://reelstray.instagram.com/") {
+    return process_entries(parsed);
   }
 
   if (parsed.url === "https://reelstray.instagram.com/" ||

@@ -10,7 +10,10 @@ var db_rules = db.get("rules");
 var db_messages = db.get("messages");
 var db_guilds = db.get("guilds");
 
-// TODO: create indexes
+db_messages.createIndex({ broadcast_guid: 1 });
+db_messages.createIndex({ messageid: 1 });
+db_rules.createIndex({ star_id: 1 });
+db_rules.createIndex({ all: 1 });
 
 if (false) {
   var total_rules = 0;
