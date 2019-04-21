@@ -290,6 +290,18 @@ var msgs = {
     en: "Invalid value for `%%1`. Acceptable values are `true` or `false`.",
     kr: "`%%1` 잘못되었습니다. 사용할 수 있는 값은 `true` (참), `false` (거짓)."
   },
+  invalid_number: {
+    en: "Invalid value for `%%1`. It must be a number.",
+    kr: "`%%1` 잘못되었습니다. 숫자여야 합니다."
+  },
+  page: {
+    en: "page",
+    kr: "페이지"
+  },
+  next_page: {
+    en: "*Too many rules to list in one message. Use `list %%1` to see the next page.*",
+    kr: "*구독은 너무 많습니다. 다음 페이지 보려면 `목록 %%1` 입력하십시오.*"
+  },
   forget_quotes: {
     en: "Did you forget to add quotes around `group_and_member_name`? %%{help_for_more_info_upper}",
     kr: "`그룹과멤버이름` 뒤앞에 따옴표를 잊었습니까? %%{help_for_more_info_upper}"
@@ -2087,9 +2099,25 @@ client.on('message', async message => {
       return message.reply(_(lang, "no_rules_found"));
     }
 
+    var page = 0;
+    if (args.length >= 2) {
+      try {
+        page = sanitize_id(args[1]);
+      } catch (e) {
+        return message.reply(_(lang, "invalid_number", _(lang, "page")));
+      }
+
+      if (page > 0)
+        page--;
+    }
+
     var message_text = "**" + _(lang, "rule_list") + "**\n\n";
 
-    for (var i = 0; i < rules.length; i++) {
+    const PAGE_SIZE = 30;
+    var start = page * PAGE_SIZE;
+    var end = Math.min((page + 1) * PAGE_SIZE, rules.length);
+
+    for (var i = start; i < end; i++) {
       var rule = rules[i];
       var text = "`" + rule.rule_id + "` ";
 
@@ -2167,6 +2195,10 @@ client.on('message', async message => {
       text += ")";
 
       message_text += text + "\n";
+    }
+
+    if (end < rules.length) {
+      message_text += "\n\n" + _(lang, "next_page", page + 2);
     }
 
     message.reply(message_text);
