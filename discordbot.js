@@ -93,7 +93,7 @@ var msgs = {
   },
   removed_rule: {
     en: "Removed rule #**%%1**",
-    kr: "구독 #**%%1** 취소합니다"
+    kr: "구독 #**%%1** 취소됩니다"
   },
   rule_not_found: {
     en: "Rule #**%%1** not found",
@@ -198,8 +198,8 @@ var msgs = {
     "%%{subscribe_username_ok_help}"
   ].join("\n"),
   subscribe_guild_args: {
-    en: "channel_id group_and_member_name subscription_type [ping_role_id]",
-    kr: "채널ID 그룹과멤버이름 구독종류 [알림역할ID]"
+    en: "channel group_and_member_name subscription_type [ping_role_id]",
+    kr: "채널 그룹과멤버이름 구독종류 [알림역할ID]"
   },
   subscribe_guild_shorthelp: {
     en: "Subscribes a channel to a person's lives or replays",
@@ -213,9 +213,19 @@ var msgs = {
     "       `%%{subscribe_command} 123456 \"Girls Generation Taeyeon\" %%{replays} 7890`",
     "       `%%{subscribe_command} 123456 '소녀시대 태연' %%{lives},%%{replays},%%{stories}`"
   ].join("\n"),
-  find_channelid: {
+  /*find_channelid: {
     en: "To find the `channel_id`, enable Developer Mode, right click on the channel, and select 'Copy ID'.",
     kr: "`채널ID` 찾으려면 '개발자 모드' 사용하고 채널을 마우스 오른쪽 버튼으로 클릭하고 'ID 복사' 선택하십시오."
+    },*/
+  find_channelid: {
+    en: [
+      "`channel` is the channel name, with the `#` at the front. For example: #general",
+      "If for any reason it doesn't work, enable Developer Mode, right click on the channel, select 'Copy ID', then paste that instead."
+    ].join("\n"),
+    kr: [
+      "`채널`은 앞에 '#' 붙인 채널이름입니다. 예를 들어서 #general",
+      "만약 어떤 이유로 문제 발생하면 '개발자 모드' 사용하고 채널을 마우스 오른쪽 버튼으로 클릭하고 'ID 복사' 선택하시고 붙이십시오."
+    ].join("\n")
   },
   ping_role_help: {
     en: [
@@ -285,8 +295,8 @@ var msgs = {
     kr: "`그룹과멤버이름` 뒤앞에 따옴표를 잊었습니까? %%{help_for_more_info_upper}"
   },
   invalid_channel_id: {
-    en: "Invalid channel_id: `%%1` (make sure you copied the ID, not the name of the channel)",
-    kr: "채널ID (`%%1`) 잘못되었습니다 (채널 이름 아니라 ID 입력하십시오)"
+    en: "Invalid channel_id: `%%1` (if you keep having this issue, try copying the channel ID instead of the name of the channel)",
+    kr: "채널ID (`%%1`) 잘못되었습니다 (만약 이 문제 계속 발생하면 채널 이름 아니라 채널ID 입력해보십시오)"
   },
   channel_id_not_exist: {
     en: "The specified channel ID (`%%1`) does not exist, or is not accessible by the bot",
@@ -662,16 +672,25 @@ async function send_channel(guildid, channelid, pings, text, properties, message
     return null;
   }
 
-  var message = await channel.send(text, message_options);
-  properties = init_message(properties, text, message);
-  properties.guild = guildid;
-  properties.channel = channelid;
+  var message;
+  try {
+    message = await channel.send(text, message_options);
+    properties = init_message(properties, text, message);
+    properties.guild = guildid;
+    properties.channel = channelid;
 
-  properties.pings = [];
-  if (pings)
-    properties.pings = pings;
+    properties.pings = [];
+    if (pings)
+      properties.pings = pings;
 
-  db_messages.insert(properties);
+    db_messages.insert(properties);
+  } catch (e) {
+    console.error("Error sending message to channel: " + channelid + " (guild: " + guildid + ")");
+    if (guild.owner) {
+      console.log(guild.owner.user);
+    }
+    console.error(e);
+  }
 
   return message;
 }
