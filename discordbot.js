@@ -113,7 +113,7 @@ var msgs = {
   },
   replays_help: {
     en: [
-      "`subscription_type` is an optional comma-separated argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
+      "`subscription_type` is an optional comma-separated (wihout spaces) argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
       "Possible values:",
       "",
       "    * `lives`        - Subscribes to livestreams",
@@ -122,7 +122,7 @@ var msgs = {
       "",
     ].join("\n"),
     kr: [
-      "`구독종류`은 쉼표로 구분된 선택적인 속성입니다. 지정되지 않으면 값은 `라이브,다시보기` 일겁니다. 가능한 값은",
+      "`구독종류`은 쉼표로 구분된 (공백 없는) 선택적인 속성입니다. 지정되지 않으면 값은 `라이브,다시보기` 일겁니다. 가능한 값은",
       "",
       "    * `라이브`       - 라이브 구독하기",
       "    * `다시보기`   - 다시보기 구독하기",
