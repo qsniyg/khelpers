@@ -113,7 +113,7 @@ var msgs = {
   },
   replays_help: {
     en: [
-      "`subscription_type` is an optional comma-separated (wihout spaces) argument that determines what you subscribe to. If not specified, the default is `lives,replays`.",
+      "`subscription_type` is an optional comma-separated argument (without spaces) that determines what you subscribe to. If not specified, the default is `lives,replays`.",
       "Possible values:",
       "",
       "    * `lives`        - Subscribes to livestreams",
@@ -1896,6 +1896,11 @@ client.on('message', async message => {
     var replays = is_user ? args[2] : args[3];
     var ping_role_id = is_user ? null : args[4];
 
+    var possible_error = null;
+    if (args[0] === "subscribe" &&
+        args[1] === "to")
+      possible_error = "Did you mean to write `subscribe` instead of `subscribe to`?";
+
     var subscription_types = {};
 
     // For cases where the ping role is specified, but replays isn't
@@ -1937,7 +1942,9 @@ client.on('message', async message => {
       if (badreplay) {
         //var memberhelp = " (use the `help` command for more information)";
         var memberhelp = _(lang, "help_for_more_info_upper");
-        if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
+        if (possible_error) {
+          memberhelp = possible_error;
+        } else if (typeof star_search === "string" && star_search.indexOf(" ") < 0) {
           //memberhelp = " (did you forget to add quotes around the member name? Use the `help` command for examples)";
           memberhelp = _(lang, "forget_quotes");
         }
