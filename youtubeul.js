@@ -196,6 +196,10 @@ function upload_video_yt(options) {
       }
     };
 
+    if ((options.privacy === "public" && options.followers && options.followers >= 5000*1000 && options.account && options.account.notify_yt !== false) ||
+        options.account && options.account.notify_yt === true)
+      delete base_request.notifySubscribers;
+
     var req;
     if (options.youtube_id) {
       base_request.resource.id = options.youtube_id;
@@ -616,6 +620,14 @@ function main() {
       console.log(member);
       var account = found_account.account;
 
+      var followers = 0;
+      try {
+        var properties = parse_feeds.get_description_properties(account.obj.description);
+        followers = parseInt(properties.followers);
+      } catch (e) {
+        console.error(e);
+      }
+
       var coauthor_members = [];
       coauthors.forEach((coauthor) => {
         var found_coauthor = found_accounts[coauthor];
@@ -698,7 +710,9 @@ function main() {
         file: real_filename,
         privacy: privacy,
         youtube_id: youtubeid,
-        yt_playlist: yt_playlist
+        yt_playlist: yt_playlist,
+        account: account,
+        followers
       });
       return;
     }
@@ -758,7 +772,9 @@ function do_upload(options) {
       file: options.file,
       privacy: options.privacy,
       youtube_id: options.youtube_id,
-      yt_playlist: options.yt_playlist
+      yt_playlist: options.yt_playlist,
+      followers: options.followers,
+      account: options.account
     });
   }, () => {
     upload_video({

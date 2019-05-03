@@ -11,7 +11,9 @@ function is_member_account(member, id, site) {
     return false;
 
   for (var i = 0; i < member.accounts.length; i++) {
-    if (member.accounts[i].site !== site)
+    if (!member.accounts[i] ||
+        !member.accounts[i].username ||
+        member.accounts[i].site !== site)
       continue;
 
     if (site === "instagram" ||
@@ -95,11 +97,11 @@ function can_share(member, account) {
     return true;
 
   //if (member.bot_whitelist === true) {
-  if (account.bot_whitelist === true || !account.obj) {
+  if (account.bot_whitelist === true) {
     return true;
   }
 
-  if (account.bot_whitelist === false)
+  if (account.bot_whitelist === false || !account.obj)
     return false;
 
 
@@ -318,6 +320,9 @@ function process_lives(parsed) {
   var lives = [];
   for (var i = 0; i < parsed.entries.length; i++) {
     var entry = parsed.entries[i];
+    if (!entry)
+      continue;
+
     if (!entry.caption ||
         entry.caption !== "[LIVE]" &&
         !entry.caption.startsWith("[LIVE] "))
@@ -370,6 +375,9 @@ function process_entries(parsed) {
   var entries = [];
   for (var i = 0; i < parsed.entries.length; i++) {
     var entry = parsed.entries[i];
+    if (!entry)
+      continue;
+
     var type = "post";
     var watch_link = entry.url;
 

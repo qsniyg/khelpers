@@ -555,6 +555,10 @@ function get_name(text, member) {
     ret.user_roman = alt.user_roman;
   }
 
+  if ("notify_yt" in alt) {
+    ret.notify_yt = alt.notify_yt;
+  }
+
   if ("alt_accounts" in alt && alt.alt_accounts instanceof Array) {
     ret.alt_accounts = [];
     alt.alt_accounts.forEach(account => {
@@ -842,6 +846,8 @@ function parse_member(obj, options) {
       member.user_roman = name.user_roman;
     if (name.has_alt !== undefined)
       member.has_alt = name.has_alt;
+    if (name.notify_yt !== undefined)
+      member.notify_yt = name.notify_yt;
     if (name.tags !== undefined && name.tags.length > 0) {
       member.user_tags = name.tags;
     }
