@@ -15,6 +15,11 @@ var rotate = "0";
 var init_offset = 0;
 
 function sort_cuts() {
+  console.log("Sorting cuts. Input:");
+  console.log(cut);
+
+  var orig_cuts = JSON.stringify(cut);
+
   cut.sort((a, b) => {
     if (a[0] < b[0])
       return -1;
@@ -26,6 +31,9 @@ function sort_cuts() {
 
   var newcuts = [];
   for (var i = 0; i < cut.length; i++) {
+    if (cut[i][2] === "ignore")
+      continue;
+
     var ignore = false;
     for (var j = 0; j < newcuts.length; j++) {
       if (cut[i][2] !== newcuts[j][2])
@@ -48,6 +56,88 @@ function sort_cuts() {
   }
 
   cut = newcuts;
+
+  newcuts = [];
+
+  for (var i = 0; i < cut.length; i++) {
+    var ignore = false;
+    var additional = [];
+    for (var j = 0; j < newcuts.length; j++) {
+      if (cut[i][2] === newcuts[j][2] || newcuts[j][2] === "ignore")
+        continue;
+
+      // Check if there's an overlapping portion
+      if (cut[i][0] > newcuts[j][1] ||
+          cut[i][1] < newcuts[j][0]) {
+        continue;
+      }
+
+      if (cut[i][2] === "av" &&
+          newcuts[j][2] === "a") {
+        if (newcuts[j][1] > cut[i][1]) {
+          additional.push([cut[i][1], newcuts[j][1], newcuts[j][2]]);
+        }
+
+        if (newcuts[j][0] >= cut[i][0]) {
+          newcuts[j][2] = "ignore";
+        } else {
+          newcuts[j][1] = cut[i][0];
+        }
+      } else if (cut[i][2] === "a" &&
+                 newcuts[j][2] === "av") {
+        // If it's completely contained within, no need for a cut
+        if (cut[i][0] >= newcuts[j][0] &&
+            cut[i][1] <= newcuts[j][1]) {
+          ignore = true;
+          break;
+        }
+
+        if (cut[i][0] < newcuts[j][0]) {
+          cut[i][1] = newcuts[j][0];
+        }
+
+        if (cut[i][1] > newcuts[j][1]) {
+          cut[i][0] = newcuts[j][1];
+        }
+      }
+    }
+
+    if (!ignore) {
+      newcuts.push(cut[i]);
+    }
+
+    if (additional) {
+      for (var j = 0; j < additional.length; j++) {
+        newcuts.push(additional[j]);
+      }
+    }
+  }
+
+  cut = newcuts;
+  if (JSON.stringify(cut) !== orig_cuts) {
+    sort_cuts();
+  }
+}
+
+function get_shifted_time(time) {
+  var timeoffset = 0;
+  var offsetted = time;
+  for (var i = 0; i < cut.length; i++) {
+    if (offsetted < cut[i][0])
+      return offsetted;
+
+    if (cut[i][2] === "av") {
+      var offset = cut[i][1] - cut[i][0];
+      timeoffset -= offset;
+      offsetted += offset;
+    }
+  }
+
+  if (offsetted !== time) {
+    console.log("Offsetted time: " + offsetted + " (original: " + time + ")");
+  }
+
+  return offsetted;
 }
 
 function parse_copyright_table(tr, id) {
@@ -107,8 +197,8 @@ function parse_copyright_table(tr, id) {
   var em = parseInt(matchobj[5]);
   var es = parseInt(matchobj[6]);
 
-  var start = sh * 3600 + sm * 60 + ss;
-  var end = eh * 3600 + em * 60 + es;
+  var start = get_shifted_time(sh * 3600 + sm * 60 + ss);
+  var end = get_shifted_time(eh * 3600 + em * 60 + es);
 
   var policyel = cheerio(tds[2]).find("li.copynotice-claim-table-policy")[0];
   if (!policyel) {
