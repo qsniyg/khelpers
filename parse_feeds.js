@@ -385,7 +385,9 @@ function parse_name(text, obj) {
     } else if (text[0] === "류") {
       lastname = "Ryu";
     } else if (text[0] === "엄") {
-      lastname = "Um";
+      lastname = "Uhm";
+    } else if (text[0] === "곽") {
+      lastname = "Kwak";
     }
   }
 
@@ -557,6 +559,10 @@ function get_name(text, member) {
 
   if ("notify_yt" in alt) {
     ret.notify_yt = alt.notify_yt;
+  }
+
+  if ("yt_accounts_extra" in alt) {
+    ret.yt_accounts_extra = alt.yt_accounts_extra;
   }
 
   if ("alt_accounts" in alt && alt.alt_accounts instanceof Array) {
@@ -848,6 +854,8 @@ function parse_member(obj, options) {
       member.has_alt = name.has_alt;
     if (name.notify_yt !== undefined)
       member.notify_yt = name.notify_yt;
+    if (name.yt_accounts_extra !== undefined)
+      member.yt_accounts_extra = name.yt_accounts_extra;
     if (name.tags !== undefined && name.tags.length > 0) {
       member.user_tags = name.tags;
     }

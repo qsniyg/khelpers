@@ -471,11 +471,11 @@ function process_replays(parsed) {
     }
 
     var coauthors = [];
-    var comatch = entry.description.match(/^ *ft\. https?:\/\/[^/]*\/[^/]*\/? *$/mg);
+    var comatch = entry.description.match(/^ *ft\. https?:\/\/[^/]*\/[^/]*\/? *(?:[(][:0-9]+[)])?$/mg);
     if (comatch) {
       for (var j = 0; j < comatch.length; j++) {
         var matchtext = comatch[j];
-        var ourmatch = matchtext.match(/^ *ft\. https?:\/\/[^/]*\/([^/]*)\/? *$/m);
+        var ourmatch = matchtext.match(/^ *ft\. https?:\/\/[^/]*\/([^/]*)\/? *(?:[(][:0-9]+[)])?$/m);
         if (ourmatch) {
           coauthors.push(ourmatch[1]);
         }
@@ -587,6 +587,12 @@ function process_delete() {
     if (!process.argv[4].match(/^https?:\/\/youtu/))
       return;
 
+    action = {
+      type: "message",
+      broadcast_guid: process.argv[4],
+      message_type: process.argv[3]
+    };
+  } else if (process.argv[3] === "live") {
     action = {
       type: "message",
       broadcast_guid: process.argv[4],

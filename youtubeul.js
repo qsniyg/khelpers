@@ -621,11 +621,13 @@ function main() {
       var account = found_account.account;
 
       var followers = 0;
-      try {
-        var properties = parse_feeds.get_description_properties(account.obj.description);
-        followers = parseInt(properties.followers);
-      } catch (e) {
-        console.error(e);
+      if (account.obj) {
+        try {
+          var properties = parse_feeds.get_description_properties(account.obj.description);
+          followers = parseInt(properties.followers);
+        } catch (e) {
+          console.error(e);
+        }
       }
 
       var coauthor_members = [];
@@ -653,13 +655,22 @@ function main() {
       });
 
       function resolve_variable(name) {
-        return base_variable(name, {
+        var baseobj = {
           m: member,
           a: account,
           cm: coauthor_members,
           c: coauthors,
+          e_k: "",
+          e_e: "",
           site: parse_feeds.feeds_toml[account.site]
-        });
+        };
+
+        if (member.yt_accounts_extra && member.yt_accounts_extra.length > 0) {
+          baseobj.e_e = member.yt_accounts_extra[0];
+          baseobj.e_k = member.yt_accounts_extra[1];
+        }
+
+        return base_variable(name, baseobj);
       }
 
       var new_firsttitle, new_firsttitle_kr;
