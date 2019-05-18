@@ -2022,7 +2022,7 @@ client.on('message', async message => {
     } else {
       star = await find_star({search: star_search});
       if (!star) {
-        star = await find_star({username: star_search, site: "instagram"});
+        star = await find_star({username: star_search.replace(/[\s]/g, ""), site: "instagram"});
         if (!star) {
           //var text = "Unable to find `" + star_search + "`.\n\nThe account may be in the database, but is not currently accessible to the bot. Use the `#account-suggestions` channel in the LiveBot server to request a new account.";
           let text = _(lang, "unable_to_find_account", star_search);
