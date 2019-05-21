@@ -423,7 +423,7 @@ var msgs = {
     kr: "골드라이브"
   },
   noupload: {
-    en: "will likely not be uploaded",
+    en: "will not be publicly uploaded",
     kr: "다시보기 올리지 않을 것입니다"
   },
   is_live_on: {

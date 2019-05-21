@@ -483,6 +483,7 @@ function get_name(text, member) {
         alt[akey] = newalt[akey];
         ret.has_alt = true;
         if (akey === "bot_whitelist" ||
+            akey === "notify_yt" ||
             akey === "upload_privacy")
           account[akey] = newalt[akey];
       }
@@ -852,8 +853,9 @@ function parse_member(obj, options) {
       member.user_roman = name.user_roman;
     if (name.has_alt !== undefined)
       member.has_alt = name.has_alt;
-    if (name.notify_yt !== undefined)
+    if (name.notify_yt !== undefined) {
       member.notify_yt = name.notify_yt;
+    }
     if (name.yt_accounts_extra !== undefined)
       member.yt_accounts_extra = name.yt_accounts_extra;
     if (name.tags !== undefined && name.tags.length > 0) {
