@@ -341,7 +341,11 @@ function make_cut(outfile, start, end, noaudio) {
                     '-to', seconds_to_timestamp(end),
                     //'-t', seconds_to_timestamp(end - start),
                     '-y'
-                  ]);*/
+                    ]);*/
+
+  //args.push("-copyts"); // breaks things
+  args.push("-avoid_negative_ts");
+  args.push("1");
 
   if (noaudio) {
     //args.push("-an");
@@ -367,6 +371,7 @@ function make_cut(outfile, start, end, noaudio) {
   }
 
   args.push("-shortest");
+
   args.push("-y");
 
   args.push(outfile);
