@@ -329,8 +329,8 @@ function make_cut(outfile, start, end, noaudio) {
   if (end >= 0) {
     args.push.apply(args,
                     [
-                      '-to', seconds_to_timestamp(end)
-                      //'-t', seconds_to_timestamp(end - start)
+                      //'-to', seconds_to_timestamp(end)
+                      '-t', seconds_to_timestamp(end - start)
                     ]);
   } else {
     args.push.apply(args, ['-t', seconds_to_timestamp(end)]);
