@@ -5,6 +5,7 @@ var request = require('request');
 var cheerio = require('cheerio');
 var fs = require('fs');
 var child_process = require('child_process');
+var readlineSync = require('readline-sync');
 
 var cut = [];
 var videofile = null;
@@ -313,13 +314,17 @@ function make_cut(outfile, start, end, noaudio) {
     "-seek_timestamp", "-2147483648.000000"
   ];
 
-  args.push('-i');
-  args.push(videofile);
+  //args = [];
 
+  // adding it after -i seems to break some videos. this is also faster, and doesn't lose accuracy
+  //   https://trac.ffmpeg.org/wiki/Seeking
   if (start > 0) {
     args.push('-ss');
     args.push(seconds_to_timestamp(start));
   }
+
+  args.push('-i');
+  args.push(videofile);
 
   if (end >= 0) {
     args.push.apply(args,
@@ -432,11 +437,21 @@ function create_video() {
     '-safe', '0',
     '-i', '/tmp/remcopy_concat.txt',
     '-c', 'copy',
-    "/tmp/remcopy.mp4"
+    "/tmp/remcopy.mp4",
+    '-y'
   ])) {
     console.log("Error running final ffmpeg");
     //cleanup(files);
     return false;
+  }
+
+  run_process("mpv", ["/tmp/remcopy.mp4"]);
+  if (!readlineSync.keyInYNStrict("[copyright] Do you wish to continue?")) {
+    return;
+  }
+
+  if (!readlineSync.keyInYNStrict("[copyright] Are you sure?")) {
+    return;
   }
 
   //cleanup(files);
