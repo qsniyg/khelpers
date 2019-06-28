@@ -439,8 +439,8 @@ function strip(x) {
 module.exports.strip = strip;
 
 function get_name(text, member) {
-  if (text.length < 2)
-    return;
+  /*if (text.length < 2)
+    return;*/
 
   var ret = {
     "names": [],

@@ -93,6 +93,9 @@ function can_share(member, account) {
   if (member.member_name && member.member_name.startsWith("@"))
     return false;
 
+  if (!account || !account.site)
+    return false;
+
   if (account.site !== "instagram")
     return true;
 
