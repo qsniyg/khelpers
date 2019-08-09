@@ -1476,8 +1476,8 @@ function sanitize_id(id) {
     throw "id is not a string";
 
   // in case someone wrote a channel name instead
-  if (id.match(/^<!?[#@]([0-9]+)>$/))
-    return id.replace(/^<!?[#@]([0-9]+)>$/, "$1");
+  if (id.match(/^<!?[#@]&?([0-9]+)>$/))
+    return id.replace(/^<!?[#@]&?([0-9]+)>$/, "$1");
 
   // underscores can be accidentally pressed and harder to see
   if (id.match(/^_*([0-9]+)_*$/))

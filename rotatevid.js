@@ -194,7 +194,7 @@ function main() {
   if (!create_video(videofile, orients))
     return;
 
-  run_process("mpv", [outfile]);
+  run_process("mpv", ["--mute", outfile]);
   if (!readlineSync.keyInYNStrict("[unrotated] Do you wish to continue?")) {
     return;
   }

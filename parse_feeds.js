@@ -27,7 +27,7 @@ var toplevel_feed;
 var toplevel_feeds = {};
 module.exports.toplevel_feed = toplevel_feed;
 module.exports.toplevel_feeds = toplevel_feeds;
-module.exports.members = null;
+module.exports.members = [];
 
 var members_by_group = {};
 
@@ -866,6 +866,22 @@ function parse_member(obj, options) {
         member.accounts.push(account);
       });
     }
+
+    if (options.group) {
+      if (options.group in feeds_toml) {
+        for (var key in feeds_toml[options.group]) {
+          if (!(key in member)) {
+            member[key] = feeds_toml[options.group][key];
+
+            if (key === "bot_whitelist") {
+              member.accounts.forEach(account => {
+                account.bot_whitelist = feeds_toml[options.group][key];
+              });
+            }
+          }
+        }
+      }
+    }
   }
 
 
@@ -1054,8 +1070,10 @@ function parse_member(obj, options) {
     if (!korean_member_name) {
       if (member.names && member.names_hangul_first)
         korean_member_name = member.names_hangul_first;
-      else
+      else if (has_hangul(member.alt))
         korean_member_name = member.alt;
+      else
+        korean_member_name = member_name;
     }
   } else {
     if (member.nicks_roman_first &&
@@ -1071,8 +1089,10 @@ function parse_member(obj, options) {
       korean_member_name = member.nicks_hangul_first || member.nicks_roman_first;
     } else if (member.names && member.names_hangul_first) {
       korean_member_name = member.names_hangul_first;
-    } else {
+    } else if (has_hangul(member.alt)) {
       korean_member_name = member.alt;
+    } else {
+      korean_member_name = member_name;
     }
   }
 
@@ -1325,6 +1345,11 @@ function merge_members(member1, member2) {
 function do_sns(site) {
   if (!feeds_toml[site]) {
     console.error("[" + site + "] not in feeds.toml");
+    return;
+  }
+
+  if (!feeds_toml[site].path) {
+    console.error("Need 'path' property for [" + site + "]");
     return;
   }
 

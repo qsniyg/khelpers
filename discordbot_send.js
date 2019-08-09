@@ -506,6 +506,7 @@ function process_add_account() {
     return;
 
   var accountname = process.argv[3];
+  console.log(accountname);
   if (!accountname)
     return;
 
