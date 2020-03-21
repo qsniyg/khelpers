@@ -1,7 +1,7 @@
 'use strict';
 
-var google = require('googleapis');
 var google_oauth = require('./google_oauth');
+var {google} = require('googleapis');
 //var parse_feeds = require('./parse_feeds');
 var parse_feeds = null;
 var fs = require('fs');
@@ -14,7 +14,6 @@ var readlineSync = require('readline-sync');
 var tz_offset = 9; // KST
 var tz_name = "Asia/Seoul";
 moment.tz.setDefault(tz_name);
-
 
 var scopes = [
   'https://www.googleapis.com/auth/youtube.upload',
@@ -49,13 +48,13 @@ function get_videos() {
           req = youtube.playlistItems.list({
             part: 'snippet,contentDetails',
             maxResults: 50,
-            playlistId: data.items[0].contentDetails.relatedPlaylists.uploads
+            playlistId: data.data.items[0].contentDetails.relatedPlaylists.uploads
           }, function (err, data) {
             if (err) {
               console.error('Error: ' + err);
               reject();
             } else {
-              resolve(data.items);
+              resolve(data.data.items);
             }
           });
         }
@@ -216,7 +215,7 @@ function upload_video_yt(options) {
           console.log(err);
         }
 
-        var result = data.items[0];
+        var result = data.data.items[0];
 
         console.dir(result);
 
@@ -296,18 +295,18 @@ function upload_video_yt(options) {
 
         if (!err) {
           try {
-            if (!data) {
+            if (!data || !data.data) {
               err = "No response data";
-            } else if (!data.id) {
+            } else if (!data.data.id) {
               err = "No video ID in response";
-            } else if (data.kind !== "youtube#video") {
-              err = "Kind != 'youtube#video' (" + data.kind + ")";
-            } else if (!data.snippet) {
+            } else if (data.data.kind !== "youtube#video") {
+              err = "Kind != 'youtube#video' (" + data.data.kind + ")";
+            } else if (!data.data.snippet) {
               err = "No snippet in response";
-            } else if (!data.status) {
+            } else if (!data.data.status) {
               err = "No status in response";
-            } else if (data.status.uploadStatus !== "uploaded") {
-              err = "uploadStatus !== 'uploaded' (" + data.status.uploadStatus + ")";
+            } else if (data.data.status.uploadStatus !== "uploaded") {
+              err = "uploadStatus !== 'uploaded' (" + data.data.status.uploadStatus + ")";
             }
           } catch (e) {
             err = "Error getting unknown error";
@@ -324,7 +323,7 @@ function upload_video_yt(options) {
         } else {
           notifier.notify({
             title: "[YT] Live uploaded",
-            message: 'Live "' + options.title + '" has been uploaded to youtube: ' + data.id
+            message: 'Live "' + options.title + '" has been uploaded to youtube: ' + data.data.id
           });
         }
 
@@ -337,7 +336,7 @@ function upload_video_yt(options) {
         };
 
         if (options.yt_playlist)
-          add_to_playlist(youtube, options.yt_playlist, data.id, endcb);
+          add_to_playlist(youtube, options.yt_playlist, data.data.id, endcb);
         else
           endcb();
       });

@@ -4,10 +4,9 @@
 
 var fs = require('fs');
 var readline = require('readline');
-var googleAuth = require('google-auth-library');
+//var googleAuth = require('google-auth-library');
+const {google} = require('googleapis');
 var path = require('path');
-const Picasa = require('picasa');
-const picasa = new Picasa();
 
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
     process.env.USERPROFILE) + '/.credentials/';
@@ -32,36 +31,6 @@ module.exports = function(namespace, scopes_, callback) {
   });
 };
 
-function authorize_picasa(credentials, callback) {
-  fs.readFile(TOKEN_PATH, function(err, token) {
-    if (err) {
-      //getNewToken(scopes, oauth2Client, callback);
-      var config = {
-        clientId: credentials.installed.client_id,
-        redirectURI: credentials.installed.token_uri,
-        clientSecret: credentials.installed.client_secret
-      };
-
-      var authURL = picasa.getAuthURL(config);
-      console.log(authURL);
-
-      var rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      rl.question('Enter the code from that page here: ', function(code) {
-        rl.close();
-        picasa.getTokens(config, code).then(tokens => {
-          storeToken(tokens);
-          callback(tokens.accessToken);
-        });
-      });
-    } else {
-      callback(JSON.parse(token).accessToken);
-    }
-  });
-}
-
 /**
  * Create an OAuth2 client with the given credentials, and then execute the
  * given callback function.
@@ -73,8 +42,16 @@ function authorize(scopes, credentials, callback) {
   var clientSecret = credentials.installed.client_secret;
   var clientId = credentials.installed.client_id;
   var redirectUrl = credentials.installed.redirect_uris[0];
-  var auth = new googleAuth();
-  var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
+
+  const oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    redirectUrl
+  );
+
+  google.options({auth: oauth2Client});
+  //var auth = new googleAuth();
+  //var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
 
   // Check if we have previously stored a token.
   fs.readFile(TOKEN_PATH, function(err, token) {
