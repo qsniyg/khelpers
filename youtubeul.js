@@ -482,6 +482,11 @@ function main() {
     return;
   }
 
+  var site_str = matchobj[1];
+  var username_str = matchobj[2].toLowerCase();
+  var date_str = matchobj[3];
+  var date = new Date(date_str);
+
   var filename_dirname = path.dirname(filename);
   var filename_basename = path.basename(filename).replace(/(?: REPLAY.)?\.[^/.]*$/, "");
   var filesindir = [];
@@ -492,16 +497,24 @@ function main() {
   } catch (e) {
   }
 
-  var info_toml = null;
-  if (fs.existsSync(filename_dirname + "/info.toml")) {
-    var toml = require("toml");
-    var info_content = fs.readFileSync(filename_dirname + "/info.toml");
-    try {
-      info_toml = toml.parse(info_content);
-    } catch (e) {
-      console.error("Parsing error on line " + e.line + ", column " + e.column + ": " + e.message);
+  var info_tomls = {};
+
+  var read_info_toml = function(filename_dirname) {
+    var info_toml = null;
+    if (fs.existsSync(filename_dirname + "/info.toml")) {
+      var toml = require("toml");
+      var info_content = fs.readFileSync(filename_dirname + "/info.toml");
+      try {
+        info_toml = toml.parse(info_content);
+      } catch (e) {
+        console.error("Parsing error on line " + e.line + ", column " + e.column + ": " + e.message);
+      }
     }
-  }
+
+    return info_toml;
+  };
+
+  info_tomls[username_str] = read_info_toml(filename_dirname);
 
   filesindir.forEach((newfilename) => {
     if (!newfilename.startsWith(filename_basename)) {
@@ -523,7 +536,10 @@ function main() {
           temp_coauthors[birth] = [];
         }
 
-        temp_coauthors[birth].push(coauthor.toLowerCase());
+        var coauthor_username = coauthor.toLowerCase();
+        temp_coauthors[birth].push(coauthor);
+
+        info_tomls[coauthor_username] = read_info_toml(filename_dirname + "/../" + coauthor_username);
       }
     }
   });
@@ -535,11 +551,6 @@ function main() {
   });
 
   parse_feeds = require('./parse_feeds');
-
-  var site_str = matchobj[1];
-  var username_str = matchobj[2].toLowerCase();
-  var date_str = matchobj[3];
-  var date = new Date(date_str);
 
   var timestamp_year = pad(date.getFullYear()-2000, 2);
   var timestamp_month = pad(date.getMonth() + 1, 2);
@@ -636,12 +647,18 @@ function main() {
     var privacy = "private";
     var skip = false;
 
-    if (info_toml) {
-      if (info_toml.general) {
-        if (info_toml.general.skip)
-          skip = true;
+
+    for (var toml_username in info_tomls) {
+      var info_toml = info_tomls[toml_username];
+
+      if (info_toml) {
+        if (info_toml.general) {
+          if (info_toml.general.skip)
+            skip = true;
+        }
       }
     }
+
 
     if (!found) {
       do_upload({
