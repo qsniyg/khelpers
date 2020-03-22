@@ -288,45 +288,47 @@ function upload_video_yt(options) {
 
       /*base_request.headers = {
         Slug: path.basename(options.file)
-      }*/
+        }*/
 
-      req = youtube.videos.insert(base_request, function (err, data) {
+      var failfunc = function(err) {
+        console.error('Error: ' + err);
+
+        notifier.notify({
+          title: "[YT] Live error",
+          message: 'Error uploading live: ' + options.title + ' to youtube\nReason: ' + err
+        });
+      };
+
+      var successfunc = function (data) {
         console.log(data);
 
-        if (!err) {
-          try {
-            if (!data || !data.data) {
-              err = "No response data";
-            } else if (!data.data.id) {
-              err = "No video ID in response";
-            } else if (data.data.kind !== "youtube#video") {
-              err = "Kind != 'youtube#video' (" + data.data.kind + ")";
-            } else if (!data.data.snippet) {
-              err = "No snippet in response";
-            } else if (!data.data.status) {
-              err = "No status in response";
-            } else if (data.data.status.uploadStatus !== "uploaded") {
-              err = "uploadStatus !== 'uploaded' (" + data.data.status.uploadStatus + ")";
-            }
-          } catch (e) {
-            err = "Error getting unknown error";
+        var err = null;
+        try {
+          if (!data || !data.data) {
+            err = "No response data";
+          } else if (!data.data.id) {
+            err = "No video ID in response";
+          } else if (data.data.kind !== "youtube#video") {
+            err = "Kind != 'youtube#video' (" + data.data.kind + ")";
+          } else if (!data.data.snippet) {
+            err = "No snippet in response";
+          } else if (!data.data.status) {
+            err = "No status in response";
+          } else if (data.data.status.uploadStatus !== "uploaded") {
+            err = "uploadStatus !== 'uploaded' (" + data.data.status.uploadStatus + ")";
           }
+        } catch (e) {
+          err = "Error getting unknown error";
         }
 
         if (err) {
-          console.error('Error: ' + err);
-
-          notifier.notify({
-            title: "[YT] Live error",
-            message: 'Error uploading live: ' + options.title + ' to youtube\nReason: ' + err
-          });
+          failfunc(err);
         } else {
           notifier.notify({
             title: "[YT] Live uploaded",
             message: 'Live "' + options.title + '" has been uploaded to youtube: ' + data.data.id
           });
         }
-
 
         var endcb = function() {
           //process.exit();
@@ -335,29 +337,22 @@ function upload_video_yt(options) {
           upload_video_dm(options);
         };
 
-        if (options.yt_playlist)
+        if (!err && options.yt_playlist)
           add_to_playlist(youtube, options.yt_playlist, data.data.id, endcb);
         else
           endcb();
-      });
+      };
 
       var fileSize = fs.statSync(options.file).size;
-
-      // show some progress
-      var id = setInterval(function () {
-        var uploadedBytes = req.req.connection._bytesDispatched;
-        var uploadedMBytes = uploadedBytes / 1000000;
-        var progress = uploadedBytes > fileSize ?
-            100 : (uploadedBytes / fileSize) * 100;
-        /*process.stdout.clearLine();
-          process.stdout.cursorTo(0);*/
-        /*process.stdout.write*/console.log(uploadedMBytes.toFixed(2) + ' MBs uploaded. ' +
-                                            progress.toFixed(2) + '% completed.');
-        if (progress === 100) {
-          /*process.stdout.write*/console.log('\nDone uploading, waiting for response...\n');
-          clearInterval(id);
+      youtube.videos.insert(base_request, {
+        onUploadProgress: function (evt) {
+          const progress = (evt.bytesRead / fileSize) * 100;
+          console.log(progress.toFixed(2) + '% completed.');
+          if (progress === 100) {
+            console.log('\nDone uploading, waiting for response...\n');
+          }
         }
-      }, 1000);
+      }).then(successfunc, failfunc);
     }
   });
 }
