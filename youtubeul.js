@@ -347,8 +347,10 @@ function upload_video_yt(options) {
       youtube.videos.insert(base_request, {
         onUploadProgress: function (evt) {
           const progress = (evt.bytesRead / fileSize) * 100;
-          console.log(progress.toFixed(2) + '% completed.');
-          if (progress === 100) {
+
+          if (progress < 100) {
+            console.log(progress.toFixed(2) + '% completed.');
+          } else if (false) {
             console.log('\nDone uploading, waiting for response...\n');
           }
         }
