@@ -344,12 +344,17 @@ function upload_video_yt(options) {
       };
 
       var fileSize = fs.statSync(options.file).size;
+      var lastprinted = 0;
       youtube.videos.insert(base_request, {
         onUploadProgress: function (evt) {
           const progress = (evt.bytesRead / fileSize) * 100;
 
           if (progress < 100) {
-            console.log(progress.toFixed(2) + '% completed.');
+            var now = Date.now();
+            if ((now - lastprinted) > 1000) {
+              console.log(progress.toFixed(2) + '% completed.');
+              lastprinted = now;
+            }
           } else if (false) {
             console.log('\nDone uploading, waiting for response...\n');
           }
