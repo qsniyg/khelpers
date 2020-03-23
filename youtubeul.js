@@ -488,6 +488,9 @@ function main() {
   var date_str = matchobj[3];
   var date = new Date(date_str);
 
+  var files = [];
+  files.push(filename);
+
   var filename_dirname = path.dirname(filename);
   var filename_basename = path.basename(filename).replace(/(?: REPLAY.)?\.[^/.]*$/, "");
   var filesindir = [];
@@ -521,13 +524,15 @@ function main() {
     if (!newfilename.startsWith(filename_basename)) {
       return;
     }
-
     if (newfilename.indexOf(".coauthor.") >= 0) {
+      var full_filename = filename_dirname + "/" + newfilename;
+      files.push(full_filename);
+
       var coauthor = newfilename.replace(/.*?\.coauthor\./, "");
       if (coauthor !== newfilename) {
         var birth = 0;
         try {
-          var stat = fs.statSync(filename_dirname + "/" + newfilename);
+          var stat = fs.statSync(full_filename);
           birth = parseInt(stat.birthtimeMs);
         } catch (e) {
         }
@@ -540,7 +545,8 @@ function main() {
         var coauthor_username = coauthor.toLowerCase();
         temp_coauthors[birth].push(coauthor);
 
-        info_tomls[coauthor_username] = read_info_toml(filename_dirname + "/../" + coauthor_username);
+        var coauthor_dirname = filename_dirname + "/../" + coauthor_username;
+        info_tomls[coauthor_username] = read_info_toml(coauthor_dirname);
       }
     }
   });
@@ -549,6 +555,26 @@ function main() {
     temp_coauthors[coauthor_birth].forEach((coauthor) => {
       coauthors.push(coauthor);
     });
+  });
+
+  coauthors.forEach((coauthor) => {
+    var coauthor_dirname = filename_dirname + "/../" + coauthor;
+    if (fs.existsSync(coauthor_dirname)) {
+      files.forEach((file) => {
+        var file_basename = path.basename(file);
+
+        console.log("Linking " + file + " to " + coauthor_dirname);
+        try {
+          fs.linkSync(file, coauthor_dirname + "/" + file_basename);
+        } catch (e) {
+          if (e && e.code && e.code === "EEXIST") {
+            console.log("Link already exists");
+          } else {
+            console.error(e);
+          }
+        }
+      });
+    }
   });
 
   parse_feeds = require('./parse_feeds');
