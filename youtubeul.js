@@ -140,6 +140,8 @@ function add_to_playlist(youtube, playlist, video, cb) {
 function notify_fatal(message) {
   if (!the_filename)
     the_filename = "";
+
+  console.error(message);
   notifier.notify({
     title: "[YTUL] Fatal " + the_filename,
     message
@@ -159,6 +161,27 @@ function upload_video_yt(options) {
       (options.privacy !== "public" &&
        options.privacy !== "unlisted")) {
     options.privacy = "private";
+  }
+
+  var ratelimited = false;
+
+  try {
+    var ratelimitpath = path.resolve(__dirname, "ytratelimited");
+    if (fs.existsSync(ratelimitpath)) {
+      var stat = fs.statSync(ratelimitpath);
+      var birth = parseInt(stat.birthtimeMs);
+      if (new Date(birth).getUTCDate() !== new Date().getUTCDate()) {
+        console.log("Unlinking " + ratelimitpath);
+        fs.unlinkSync(ratelimitpath);
+      } else {
+        ratelimited = true;
+      }
+    }
+  } catch (e) {
+  }
+
+  if (ratelimited) {
+    notify_fatal("Rate limited");
   }
 
   google_oauth("youtube", scopes, function(auth) {
@@ -292,6 +315,17 @@ function upload_video_yt(options) {
 
       var failfunc = function(err) {
         console.error('Error: ' + err);
+
+        if (err.toString().indexOf("request cannot be completed because you have exceeded your") >= 0) {
+          console.error("Rate limited");
+
+          try {
+            var ratelimitpath = path.resolve(__dirname, "ytratelimited");
+            fs.writeFileSync(ratelimitpath, "");
+          } catch (e) {
+            console.error(e);
+          }
+        }
 
         notifier.notify({
           title: "[YT] Live error",
