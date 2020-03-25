@@ -11,9 +11,9 @@ var moment = require('moment-timezone');
 var path = require('path');
 var readlineSync = require('readline-sync');
 
-var tz_offset = 9; // KST
-var tz_name = "Asia/Seoul";
-moment.tz.setDefault(tz_name);
+//var tz_offset = 9; // KST
+//var tz_name = "Asia/Seoul";
+//moment.tz.setDefault(tz_name);
 
 var scopes = [
   'https://www.googleapis.com/auth/youtube.upload',
@@ -170,7 +170,7 @@ function upload_video_yt(options) {
     if (fs.existsSync(ratelimitpath)) {
       var stat = fs.statSync(ratelimitpath);
       var birth = parseInt(stat.birthtimeMs);
-      if (new Date(birth).getUTCDate() !== new Date().getUTCDate()) {
+      if (new Date(birth).getDate() !== new Date().getDate()) {
         console.log("Unlinking " + ratelimitpath);
         fs.unlinkSync(ratelimitpath);
       } else {
