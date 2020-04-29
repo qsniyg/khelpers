@@ -66,7 +66,7 @@ function get_videos() {
 function upload_video_dm(options) {
   // disable dailymotion for now
   if (noupload || (true && !dmupload)) {
-    console.dir(options);
+    print_options(options);
     process.exit();
     return;
   }
@@ -150,7 +150,7 @@ function notify_fatal(message) {
 }
 
 function upload_video_yt(options) {
-  console.dir(options);
+  print_options(options);
 
   if (noupload) {
     process.exit();
@@ -547,6 +547,8 @@ function main() {
       } catch (e) {
         console.error("Parsing error on line " + e.line + ", column " + e.column + ": " + e.message);
       }
+    } else {
+      console.log("No info.toml found in", filename_dirname);
     }
 
     return info_toml;
@@ -865,6 +867,13 @@ function main() {
   });
 }
 
+function print_options(options) {
+  var new_options = JSON.parse(JSON.stringify(options));
+
+  new_options.file = new_options.file.replace(/\/home\/[^/]+\//, "~/");
+  console.log(new_options);
+}
+
 function do_upload(options) {
   if (!("tags" in options)) {
     options.tags = [];
@@ -874,7 +883,7 @@ function do_upload(options) {
   options.title_korean = options.endtitle_kr + " " + options.firsttitle_korean;
 
   if (noupload || options.skip) {
-    console.log(options);
+    print_options(options);
 
     if (options.skip) {
       notify_skip(options);
