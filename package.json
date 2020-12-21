@@ -16,7 +16,7 @@
     "kroman": "^1.0.1",
     "moment-timezone": "^0.5.14",
     "monk": "^6.0.5",
-    "node-notifier": "^5.1.2",
+    "node-notifier": "^8.0.1",
     "picasa": "^1.0.7",
     "readline-sync": "^1.4.7",
     "redis": "^2.8.0",
