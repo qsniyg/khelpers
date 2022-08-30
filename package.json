@@ -14,7 +14,7 @@
     "imgur": "^0.3.1",
     "javascript-natural-sort": "^0.7.1",
     "kroman": "^1.0.1",
-    "moment-timezone": "^0.5.14",
+    "moment-timezone": "^0.5.35",
     "monk": "^6.0.5",
     "node-notifier": "^5.1.2",
     "picasa": "^1.0.7",
